@@ -64,6 +64,19 @@ N_JOBS=8 metriq-qudits --configs d4 --skip-sweep
 On Windows PowerShell, set the same variable with `$env:N_JOBS = 8` before
 running the Python command.
 
+You can also run the pipeline directly through the script, which accepts the same
+arguments:
+
+```bash
+python scripts/run_pipeline.py --configs d4 --skip-sweep
+```
+
+Result figures can likewise be regenerated from cached results with:
+
+```bash
+python scripts/plot_results.py
+```
+
 Generated artifacts are written to a visible `outputs/` directory:
 
 ```text
