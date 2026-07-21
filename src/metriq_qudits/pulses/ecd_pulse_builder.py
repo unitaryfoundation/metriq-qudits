@@ -2,10 +2,10 @@ import numpy as np
 from scipy.optimize import fmin
 from scipy.signal import find_peaks
 
-from ecd_qv.pulses.pulse_primitives import Storage, Qubit
-from ecd_qv.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
-from ecd_qv.physics.displaced_frame_model import storage_parameters
-from ecd_qv.pulses.pulse_models import CircuitPulse, ECDPulse
+from metriq_qudits.pulses.pulse_primitives import Storage, Qubit
+from metriq_qudits.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
+from metriq_qudits.physics.displaced_frame_model import storage_parameters
+from metriq_qudits.pulses.pulse_models import CircuitPulse, ECDPulse
 
 
 def get_flip_idxs(omega):
@@ -456,7 +456,7 @@ class ECDPulseBuilder:
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    from ecd_qv.plot_utils import plot_pulse, plot_trajectory_complex
+    from metriq_qudits.plot_utils import plot_pulse, plot_trajectory_complex
 
     storage = Storage(
         chi_kHz=30.0,

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ecd_qv.pulses.pulse_primitives import Storage
-from ecd_qv.physics.units import angular_frequency_from_hz, angular_frequency_from_khz
+from metriq_qudits.pulses.pulse_primitives import Storage
+from metriq_qudits.physics.units import angular_frequency_from_hz, angular_frequency_from_khz
 
 
 def storage_parameters(storage: Storage) -> tuple[float, float, float, float]:

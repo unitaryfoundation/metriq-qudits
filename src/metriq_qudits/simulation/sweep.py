@@ -8,10 +8,10 @@ from pathlib import Path
 
 import numpy as np
 
-from ecd_qv.benchmark.circuit_io import load_circuits
-from ecd_qv.benchmark.metrics import eval_circuit
-from ecd_qv.parallel import parallel_map_unordered
-from ecd_qv.pulses.pulse_stage import (
+from metriq_qudits.benchmark.circuit_io import load_circuits
+from metriq_qudits.benchmark.metrics import eval_circuit
+from metriq_qudits.parallel import parallel_map_unordered
+from metriq_qudits.pulses.pulse_stage import (
     CHI_PRIME_RAD_S,
     CHI_RAD_S,
     SELF_KERR_RAD_S,
@@ -20,8 +20,8 @@ from ecd_qv.pulses.pulse_stage import (
     physics_metadata_matches,
     variant_suffix,
 )
-from ecd_qv.pulses.pulse_io import load_pulses
-from ecd_qv.system_config import SystemConfig
+from metriq_qudits.pulses.pulse_io import load_pulses
+from metriq_qudits.system_config import SystemConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SWEEP_DIR = REPO_ROOT / ".cache" / "noise_sweep_pulse"
@@ -45,11 +45,11 @@ def results_path(
 
 def _make_simulator(backend, n_cavity):
     if backend == "dynamiqs":
-        from ecd_qv.simulation.displaced_frame_simulator_dq import DisplacedFrameSimulatorDQ
+        from metriq_qudits.simulation.displaced_frame_simulator_dq import DisplacedFrameSimulatorDQ
 
         simulator_class = DisplacedFrameSimulatorDQ
     else:
-        from ecd_qv.simulation.displaced_frame_simulator import DisplacedFrameSimulator
+        from metriq_qudits.simulation.displaced_frame_simulator import DisplacedFrameSimulator
 
         simulator_class = DisplacedFrameSimulator
     return simulator_class(
@@ -129,7 +129,7 @@ def run_noiseless(
 ) -> str:
     """Run the three-level, closed-system reference simulation."""
     if diagnostics_dir is not None:
-        from ecd_qv.plot_utils import save_state_diagnostics
+        from metriq_qudits.plot_utils import save_state_diagnostics
 
     config, n_cavity, circuits, pulses, _ = _load_inputs(
         pulse_path, compiled_path,

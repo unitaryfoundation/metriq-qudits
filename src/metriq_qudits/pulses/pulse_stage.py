@@ -8,13 +8,13 @@ from pathlib import Path
 
 import numpy as np
 
-from ecd_qv.benchmark.circuit_io import load_circuits
-from ecd_qv.parallel import parallel_map
-from ecd_qv.pulses.ecd_pulse_builder import ECDPulseBuilder
-from ecd_qv.pulses.pulse_io import load_pulses, save_pulses
-from ecd_qv.pulses.pulse_models import CircuitPulse
-from ecd_qv.pulses.pulse_primitives import Qubit, Storage
-from ecd_qv.system_config import SystemConfig
+from metriq_qudits.benchmark.circuit_io import load_circuits
+from metriq_qudits.parallel import parallel_map
+from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
+from metriq_qudits.pulses.pulse_io import load_pulses, save_pulses
+from metriq_qudits.pulses.pulse_models import CircuitPulse
+from metriq_qudits.pulses.pulse_primitives import Qubit, Storage
+from metriq_qudits.system_config import SystemConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PULSES_DIR = REPO_ROOT / ".cache" / "pulses"
@@ -174,7 +174,7 @@ def build_circuit_pulses(
 
 def save_gate_trajectory_diagnostics(compiled_path: str, output_dir: str) -> None:
     """Plot the first nonzero ECD gate's g/e trajectory for each circuit."""
-    from ecd_qv.plot_utils import save_conditional_trajectory_diag
+    from metriq_qudits.plot_utils import save_conditional_trajectory_diag
 
     compiled, _ = load_circuits(compiled_path)
     builder = ECDPulseBuilder(make_storages(1), make_qubit())

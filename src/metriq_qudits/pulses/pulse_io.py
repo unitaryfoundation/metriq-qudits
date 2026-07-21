@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ecd_qv.pulses.pulse_models import CircuitPulse
+from metriq_qudits.pulses.pulse_models import CircuitPulse
 
 
 def save_pulses(path: str, pulses: list[CircuitPulse], metadata: dict) -> None:

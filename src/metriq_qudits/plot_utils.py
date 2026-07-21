@@ -16,7 +16,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ecd_qv.benchmark.metrics import hog_ideal
+from metriq_qudits.benchmark.metrics import hog_ideal
 
 METRICS = ("hog", "xeb", "fid")
 

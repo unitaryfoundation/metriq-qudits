@@ -42,23 +42,23 @@ The code is currently tested with Python 3.12 and 3.13.
    [JAX installation guide](https://docs.jax.dev/en/latest/installation.html)
    for their platform before installing the remaining requirements.
 
-5. Confirm that the pipeline can be imported and view the available options:
+5. Confirm that the command is installed and view the available options:
 
    ```bash
-   python scripts/run_pipeline.py --help
+   metriq-qudits --help
    ```
 
 6. Run the smallest configured system without the full noise sweep:
 
    ```bash
-   python scripts/run_pipeline.py --configs d4 --skip-sweep
+   metriq-qudits --configs d4 --skip-sweep
    ```
 
 Circuit compilation and pulse-level simulation are computationally expensive.
 Set `N_JOBS` to run independent circuits in parallel:
 
 ```bash
-N_JOBS=8 python scripts/run_pipeline.py --configs d4 --skip-sweep
+N_JOBS=8 metriq-qudits --configs d4 --skip-sweep
 ```
 
 On Windows PowerShell, set the same variable with `$env:N_JOBS = 8` before

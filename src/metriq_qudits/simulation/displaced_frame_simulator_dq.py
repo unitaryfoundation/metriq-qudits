@@ -20,13 +20,13 @@ import jax.numpy as jnp
 import dynamiqs as dq
 from scipy.interpolate import CubicSpline
 
-from ecd_qv.pulses.pulse_primitives import Storage
-from ecd_qv.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
-from ecd_qv.physics.displaced_frame_model import (
+from metriq_qudits.pulses.pulse_primitives import Storage
+from metriq_qudits.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
+from metriq_qudits.physics.displaced_frame_model import (
     ancilla_drive_coefficients, mode_conditional_coefficients,
     mode_diagonal_coefficients, mode_static_coefficients, storage_parameters,
 )
-from ecd_qv.physics.units import angular_frequency_from_mhz
+from metriq_qudits.physics.units import angular_frequency_from_mhz
 
 K_Q_DEFAULT_MHZ = -200.0  # transmon anharmonicity K_q/2π [MHz]
 

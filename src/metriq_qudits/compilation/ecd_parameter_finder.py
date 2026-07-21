@@ -19,8 +19,8 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
-from ecd_qv.benchmark.gates import _ladder_ops, _embed_cavity, _ecd, _rotation_matrix
-from ecd_qv.benchmark.circuit_io import CompiledCircuit
+from metriq_qudits.benchmark.gates import _ladder_ops, _embed_cavity, _ecd, _rotation_matrix
+from metriq_qudits.benchmark.circuit_io import CompiledCircuit
 
 
 def _mode_fock_probs(psi, num_modes: int, N: int) -> jax.Array:

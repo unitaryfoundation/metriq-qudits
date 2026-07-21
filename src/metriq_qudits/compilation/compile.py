@@ -8,9 +8,9 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import unitary_group
 
-from ecd_qv.benchmark.circuit_io import save_circuits
-from ecd_qv.parallel import parallel_map
-from ecd_qv.system_config import SystemConfig
+from metriq_qudits.benchmark.circuit_io import save_circuits
+from metriq_qudits.parallel import parallel_map
+from metriq_qudits.system_config import SystemConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPILED_DIR = REPO_ROOT / ".cache" / "compiled_circuits"
@@ -80,7 +80,7 @@ def _make_job(
 ):
     # Deferred import keeps JAX (pulled in by ecd_parameter_finder) out of this
     # module's load path, preserving the spawn-worker startup cost.
-    from ecd_qv.compilation.ecd_parameter_finder import CompileJob, OptimizerConfig
+    from metriq_qudits.compilation.ecd_parameter_finder import CompileJob, OptimizerConfig
 
     opt = OptimizerConfig(
         n_penalize=n_penalize,
@@ -104,7 +104,7 @@ def _calibrate_buffers(
     rng: np.random.Generator,
 ):
     """Find a Fock truncation whose compiled circuits are stable."""
-    from ecd_qv.compilation.ecd_parameter_finder import (
+    from metriq_qudits.compilation.ecd_parameter_finder import (
         compile_circuit_worker,
         stability_infidelity,
     )
@@ -209,7 +209,7 @@ def _probe_minimum_depth(
     n_jobs: int,
 ) -> int:
     """Probe calibration targets so production avoids repeatedly hard depths."""
-    from ecd_qv.compilation.ecd_parameter_finder import compile_circuit_worker
+    from metriq_qudits.compilation.ecd_parameter_finder import compile_circuit_worker
 
     print(
         "\n  [compile] depth probe ...  "
@@ -273,7 +273,7 @@ def compile_circuits(
     n_jobs: int = DEFAULT_N_JOBS,
 ) -> str:
     """Compile a reproducible ensemble and return its versioned cache path."""
-    from ecd_qv.compilation.ecd_parameter_finder import compile_circuit_worker
+    from metriq_qudits.compilation.ecd_parameter_finder import compile_circuit_worker
 
     COMPILED_DIR.mkdir(parents=True, exist_ok=True)
     CALIBRATION_DIR.mkdir(parents=True, exist_ok=True)
