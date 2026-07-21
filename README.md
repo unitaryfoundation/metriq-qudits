@@ -64,6 +64,27 @@ N_JOBS=8 metriq-qudits --configs d4 --skip-sweep
 On Windows PowerShell, set the same variable with `$env:N_JOBS = 8` before
 running the Python command.
 
+Generated artifacts are written to a visible `outputs/` directory:
+
+```text
+outputs/
+├── calibration/
+├── compiled_circuits/
+├── pulses/
+├── noiseless/
+├── noise_sweeps/
+└── plots/
+```
+
+To choose a different artifact root, use `--output-dir`:
+
+```bash
+metriq-qudits --output-dir /path/to/outputs --configs d4 --skip-sweep
+```
+
+The same default can be set with the `METRIQ_QUDITS_OUTPUT_DIR` environment
+variable.
+
 ## References
 
 - [Benchmarking the algorithmic reach of a high-Q cavity qudit](https://arxiv.org/abs/2408.13317)

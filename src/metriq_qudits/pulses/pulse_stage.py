@@ -4,20 +4,17 @@ from __future__ import annotations
 
 import os
 import time
-from pathlib import Path
 
 import numpy as np
 
 from metriq_qudits.benchmark.circuit_io import load_circuits
 from metriq_qudits.parallel import parallel_map
+from metriq_qudits.paths import data_dir
 from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
 from metriq_qudits.pulses.pulse_io import load_pulses, save_pulses
 from metriq_qudits.pulses.pulse_models import CircuitPulse
 from metriq_qudits.pulses.pulse_primitives import Qubit, Storage
 from metriq_qudits.system_config import SystemConfig
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
-PULSES_DIR = REPO_ROOT / ".cache" / "pulses"
 
 # Eickbusch et al. 2022, Table S1. Quoted frequencies are cycles/s. Numerical
 # kernels convert them once at their unit boundaries.
@@ -83,7 +80,7 @@ def pulse_path(config: SystemConfig, compiled_metadata: dict, correct_phases: bo
         f"_nu{int(compiled_metadata['N_unitaries'])}"
         f"_seed{int(compiled_metadata['seed'])}{suffix}.npz"
     )
-    return str(PULSES_DIR / filename)
+    return str(data_dir("pulses") / filename)
 
 
 def _build_one_pulse(args) -> CircuitPulse:
@@ -110,7 +107,7 @@ def build_circuit_pulses(
         raise ValueError("expected a single-qudit pulse cache")
     config = SystemConfig(d=int(metadata["d"]))
     output_path = pulse_path(config, metadata, correct_phases)
-    PULSES_DIR.mkdir(parents=True, exist_ok=True)
+    data_dir("pulses").mkdir(parents=True, exist_ok=True)
     if os.path.exists(output_path) and not overwrite:
         _, cached_metadata = load_pulses(output_path)
         settings_match = (

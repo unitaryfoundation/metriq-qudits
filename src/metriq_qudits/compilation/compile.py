@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 import numpy as np
 from scipy.stats import unitary_group
 
 from metriq_qudits.benchmark.circuit_io import save_circuits
 from metriq_qudits.parallel import parallel_map
+from metriq_qudits.paths import data_dir
 from metriq_qudits.system_config import SystemConfig
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
-COMPILED_DIR = REPO_ROOT / ".cache" / "compiled_circuits"
-CALIBRATION_DIR = REPO_ROOT / ".cache" / "calibration"
 
 N_UNITARIES = 25
 SEED = 42
@@ -57,11 +53,11 @@ def compiled_path(
     seed: int = SEED,
 ) -> str:
     filename = f"{config.key}_k{depth}_nu{n_unitaries}_seed{seed}.npz"
-    return str(COMPILED_DIR / filename)
+    return str(data_dir("compiled_circuits") / filename)
 
 
 def probe_path(config: SystemConfig) -> str:
-    return str(CALIBRATION_DIR / f"probe_{config.key}.npz")
+    return str(data_dir("calibration") / f"probe_{config.key}.npz")
 
 
 def _buffer_count_to_penalize(num_buffers: int) -> int:
@@ -176,7 +172,7 @@ def _calibrate_buffers(
         )
 
     tried = np.asarray(tried, dtype=np.int32)
-    path = CALIBRATION_DIR / f"cal_{config.key}_k{calibration_depth}.npz"
+    path = data_dir("calibration") / f"cal_{config.key}_k{calibration_depth}.npz"
     np.savez(
         path,
         num_buffers_tried=tried[:, 0],
@@ -275,8 +271,8 @@ def compile_circuits(
     """Compile a reproducible ensemble and return its versioned cache path."""
     from metriq_qudits.compilation.ecd_parameter_finder import compile_circuit_worker
 
-    COMPILED_DIR.mkdir(parents=True, exist_ok=True)
-    CALIBRATION_DIR.mkdir(parents=True, exist_ok=True)
+    data_dir("compiled_circuits").mkdir(parents=True, exist_ok=True)
+    data_dir("calibration").mkdir(parents=True, exist_ok=True)
     if config.dimension != config.d:
         raise ValueError("expected a single-qudit system")
 

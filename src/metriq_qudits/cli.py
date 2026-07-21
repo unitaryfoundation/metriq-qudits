@@ -12,6 +12,7 @@ if platform.system() == "Darwin":
     os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 from metriq_qudits.compilation.compile import compile_circuits
+from metriq_qudits.paths import output_dir, set_output_dir
 from metriq_qudits.pulses.pulse_stage import (
     CHI_KHZ,
     CHI_PRIME_HZ,
@@ -72,6 +73,14 @@ def _parse_args(argv=None):
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
+        "--output-dir",
+        metavar="PATH",
+        help=(
+            "Directory for generated artifacts. Defaults to "
+            "METRIQ_QUDITS_OUTPUT_DIR or ./outputs."
+        ),
+    )
+    parser.add_argument(
         "--configs",
         nargs="*",
         metavar="KEY",
@@ -108,6 +117,8 @@ def _parse_args(argv=None):
 
 def main(argv=None) -> None:
     parser, args = _parse_args(argv)
+    if args.output_dir is not None:
+        set_output_dir(args.output_dir)
     if args.configs:
         unknown = [key for key in args.configs if key not in CONFIG_BY_KEY]
         if unknown:
@@ -123,6 +134,7 @@ def main(argv=None) -> None:
         f"N_JOBS={N_JOBS}  configs={[config.key for config in selected]}  "
         f"backend={args.backend}"
     )
+    print(f"Output directory: {output_dir()}")
     print(
         f"Physics: chi/2pi={CHI_KHZ:.1f} kHz  "
         f"K/2pi={SELF_KERR_HZ:.1f} Hz  chi'/2pi={CHI_PRIME_HZ:.1f} Hz"

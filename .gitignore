@@ -1,6 +1,7 @@
 # Generated pipeline artifacts
 .cache/
 plots/
+outputs/
 
 # Python
 __pycache__/

@@ -5,7 +5,7 @@ Two groups of functions:
 - Per-circuit *diagnostics* written during a pipeline run (pulse/trajectory/
   Wigner sanity checks), used by the optional ``diagnostics_dir`` hooks in the
   pulse and simulation stages.
-- *Results* plots built after a run from the cached ``.cache/*`` npz files,
+- *Results* plots built after a run from the cached ``outputs/*`` NPZ files,
   driven by ``scripts/plot_results.py``.
 """
 

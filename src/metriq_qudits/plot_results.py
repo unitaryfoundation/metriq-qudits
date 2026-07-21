@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import glob
-from pathlib import Path
 
 import matplotlib
 
@@ -11,15 +10,12 @@ matplotlib.use("Agg")
 import numpy as np
 
 from metriq_qudits.plot_utils import METRICS, plot_metrics_vs_dim, plot_noise_heatmaps
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-CACHE = REPO_ROOT / ".cache"
-PLOTS = REPO_ROOT / "plots"
+from metriq_qudits.paths import data_dir, plots_dir
 
 
 def _load_noiseless() -> list[dict]:
     records = []
-    for path in sorted(glob.glob(str(CACHE / "noiseless" / "noiseless_d*.npz"))):
+    for path in sorted(glob.glob(str(data_dir("noiseless") / "noiseless_d*.npz"))):
         data = np.load(path)
         records.append(
             {
@@ -33,7 +29,7 @@ def _load_noiseless() -> list[dict]:
 def _load_noise_sweeps() -> list[dict]:
     records = []
     for path in sorted(
-        glob.glob(str(CACHE / "noise_sweep_pulse" / "results_d*.npz"))
+        glob.glob(str(data_dir("noise_sweeps") / "results_d*.npz"))
     ):
         data = np.load(path)
         records.append(
@@ -48,11 +44,12 @@ def _load_noise_sweeps() -> list[dict]:
 
 
 def main() -> None:
-    PLOTS.mkdir(parents=True, exist_ok=True)
+    output_plots = plots_dir()
+    output_plots.mkdir(parents=True, exist_ok=True)
 
     noiseless = _load_noiseless()
     if noiseless:
-        out = PLOTS / "metrics_vs_dim.png"
+        out = output_plots / "metrics_vs_dim.png"
         plot_metrics_vs_dim(noiseless, str(out))
         print(f"  metrics vs dim ({len(noiseless)} config(s)) -> {out}")
     else:
@@ -60,7 +57,7 @@ def main() -> None:
 
     sweeps = _load_noise_sweeps()
     if sweeps:
-        heatmap_dir = PLOTS / "heatmaps"
+        heatmap_dir = output_plots / "heatmaps"
         for record in sweeps:
             out = heatmap_dir / f"heatmap_d{record['d']}.png"
             plot_noise_heatmaps(record, str(out))

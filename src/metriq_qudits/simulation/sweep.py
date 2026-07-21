@@ -11,6 +11,7 @@ import numpy as np
 from metriq_qudits.benchmark.circuit_io import load_circuits
 from metriq_qudits.benchmark.metrics import eval_circuit
 from metriq_qudits.parallel import parallel_map_unordered
+from metriq_qudits.paths import data_dir
 from metriq_qudits.pulses.pulse_stage import (
     CHI_PRIME_RAD_S,
     CHI_RAD_S,
@@ -22,10 +23,6 @@ from metriq_qudits.pulses.pulse_stage import (
 )
 from metriq_qudits.pulses.pulse_io import load_pulses
 from metriq_qudits.system_config import SystemConfig
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
-SWEEP_DIR = REPO_ROOT / ".cache" / "noise_sweep_pulse"
-NOISELESS_DIR = REPO_ROOT / ".cache" / "noiseless"
 
 T1_VALUES = np.array([5, 10, 20, 50, 100]) * 1e-6
 T2_VALUES = np.array([10, 20, 40, 100, 200]) * 1e-6
@@ -134,9 +131,10 @@ def run_noiseless(
     config, n_cavity, circuits, pulses, _ = _load_inputs(
         pulse_path, compiled_path,
     )
-    NOISELESS_DIR.mkdir(parents=True, exist_ok=True)
+    noiseless_dir = data_dir("noiseless")
+    noiseless_dir.mkdir(parents=True, exist_ok=True)
     output_path = results_path(
-        NOISELESS_DIR,
+        noiseless_dir,
         "noiseless",
         config,
         correct_phases,
@@ -261,9 +259,10 @@ def run_noise_sweep(
     config, n_cavity, circuits, pulses, metadata = _load_inputs(
         pulse_path, compiled_path,
     )
-    SWEEP_DIR.mkdir(parents=True, exist_ok=True)
+    sweep_dir = data_dir("noise_sweeps")
+    sweep_dir.mkdir(parents=True, exist_ok=True)
     output_path = results_path(
-        SWEEP_DIR,
+        sweep_dir,
         "results",
         config,
         correct_phases,
