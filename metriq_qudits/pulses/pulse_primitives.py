@@ -40,14 +40,17 @@ class Storage:
     ``Ks_Hz`` is the full Kerr ``K = 2*Kc`` and ``chi_prime_Hz`` is You et
     al.'s ``chi_prime = 2*chi0``. Hamiltonian signs and factors of one half are
     applied centrally in :mod:`displaced_frame_model`.
+
+    The dispersive defaults are the published Eickbusch et al. 2022
+    (arXiv:2111.06414) Table S1 values: chi/2pi = 32.8 kHz, chi_prime = 2*chi0 =
+    3 Hz (from the quoted chi0/2pi = 1.5 Hz), and K = 1 Hz.
     """
 
     def __init__(
             self,
-            chi_kHz=30.0,
-            chi_prime_Hz=1.0,
-            Ks_Hz=2.0,
-            T1_us=340.0,
+            chi_kHz=32.8,
+            chi_prime_Hz=3.0,
+            Ks_Hz=1.0,
             sigma_ns=15,
             kappa_kHz=0,
             chop=4,
@@ -55,7 +58,6 @@ class Storage:
         self.chi_kHz = chi_kHz
         self.chi_prime_Hz = chi_prime_Hz
         self.Ks_Hz = Ks_Hz
-        self.T1_us = T1_us
         self.kappa_kHz = kappa_kHz
         self.sigma_ns = sigma_ns
         self.chop = chop
