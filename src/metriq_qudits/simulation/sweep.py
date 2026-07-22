@@ -123,8 +123,16 @@ def run_noiseless(
     diagnostics_dir: str | None = None,
     overwrite: bool = False,
     n_jobs: int = 1,
+    t1_values: np.ndarray | None = None,
+    t2_values: np.ndarray | None = None,
 ) -> str:
-    """Run the three-level, closed-system reference simulation."""
+    """Run the three-level, closed-system reference simulation.
+
+    ``t1_values``/``t2_values`` are only used to project the full-sweep runtime;
+    they default to the module ``T1_VALUES``/``T2_VALUES`` grid.
+    """
+    t1_values = T1_VALUES if t1_values is None else t1_values
+    t2_values = T2_VALUES if t2_values is None else t2_values
     if diagnostics_dir is not None:
         from metriq_qudits.plot_utils import save_state_diagnostics
 
@@ -212,7 +220,7 @@ def run_noiseless(
 
     time_per_circuit = (time.perf_counter() - start) / len(circuits)
     n_sweep_points = sum(
-        t2 <= 2 * t1 for t1 in T1_VALUES for t2 in T2_VALUES
+        t2 <= 2 * t1 for t1 in t1_values for t2 in t2_values
     )
     estimated_hours = (
         n_sweep_points * len(circuits) * time_per_circuit / max(n_jobs, 1) / 3600
@@ -254,8 +262,16 @@ def run_noise_sweep(
     backend: str = "dynamiqs",
     overwrite: bool = False,
     n_jobs: int = 1,
+    t1_values: np.ndarray | None = None,
+    t2_values: np.ndarray | None = None,
 ) -> str:
-    """Run or resume the three-level ancilla T1/T2 sweep."""
+    """Run or resume the three-level ancilla T1/T2 sweep.
+
+    ``t1_values``/``t2_values`` set the sweep grid (seconds) and default to the
+    module ``T1_VALUES``/``T2_VALUES``. Changing them invalidates a cached sweep.
+    """
+    t1_values = T1_VALUES if t1_values is None else t1_values
+    t2_values = T2_VALUES if t2_values is None else t2_values
     config, n_cavity, circuits, pulses, metadata = _load_inputs(
         pulse_path, compiled_path,
     )
@@ -277,7 +293,7 @@ def run_noise_sweep(
         f"chi'/2pi={CHI_PRIME_RAD_S / (2 * np.pi):.1f} Hz"
     )
 
-    shape = (len(T1_VALUES), len(T2_VALUES))
+    shape = (len(t1_values), len(t2_values))
     means = {metric: np.full(shape, np.nan) for metric in METRICS}
     standard_deviations = {
         metric: np.full(shape, np.nan) for metric in METRICS
@@ -285,8 +301,8 @@ def run_noise_sweep(
     if os.path.exists(output_path) and not overwrite:
         with np.load(output_path) as previous:
             axes_match = (
-                np.array_equal(previous["T1_values"], T1_VALUES)
-                and np.array_equal(previous["T2_values"], T2_VALUES)
+                np.array_equal(previous["T1_values"], t1_values)
+                and np.array_equal(previous["T2_values"], t2_values)
             )
             cache_matches = physics_metadata_matches(
                 previous, correct_phases,
@@ -305,8 +321,8 @@ def run_noise_sweep(
 
     grid_points = [
         (i1, i2, t1, t2)
-        for i1, t1 in enumerate(T1_VALUES)
-        for i2, t2 in enumerate(T2_VALUES)
+        for i1, t1 in enumerate(t1_values)
+        for i2, t2 in enumerate(t2_values)
         if t2 <= 2 * t1 and np.isnan(means["hog"][i1, i2])
     ]
     if not grid_points:
@@ -327,14 +343,14 @@ def run_noise_sweep(
             for metric in METRICS
         )
         print(
-            f"    T1={T1_VALUES[i1] * 1e6:.0f}us  "
-            f"T2={T2_VALUES[i2] * 1e6:.0f}us  {summary}  ({elapsed:.1f}s)",
+            f"    T1={t1_values[i1] * 1e6:.0f}us  "
+            f"T2={t2_values[i2] * 1e6:.0f}us  {summary}  ({elapsed:.1f}s)",
             flush=True,
         )
         np.savez(
             output_path,
-            T1_values=T1_VALUES,
-            T2_values=T2_VALUES,
+            T1_values=t1_values,
+            T2_values=t2_values,
             **{
                 metric: means[metric][:, :, np.newaxis]
                 for metric in METRICS
