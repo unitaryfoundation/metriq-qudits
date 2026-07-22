@@ -1,3 +1,39 @@
+"""Build physical control pulses for ECD (echoed conditional displacement) gates.
+
+An ECD gate displaces the cavity by an amount that depends on the transmon
+("ancilla") state -- the entangling primitive of the ECD + rotation gate set
+(Eickbusch et al., arXiv:2111.06414, Fig. 1). It is realized as four cavity
+displacement sub-pulses split by a transmon π-pulse ("echo"): displace out, flip
+the transmon so ground/excited swap, displace back. The echo cancels the
+state-independent displacement and much of the dephasing, leaving the desired
+qubit-conditioned displacement β. A full circuit (:meth:`ECDPulseBuilder.ecd_circuit`)
+interleaves these ECD gates with transmon rotations R(θ, φ), following the k-layer
+ansatz of Eickbusch et al. Fig. 1d.
+
+Notation
+--------
+α  (alpha)     large intermediate displacement the cavity is driven to mid-gate;
+               sets the gate speed (bigger α reaches β faster). [dimensionless]
+β  (beta)      target conditional displacement of the gate (the ECD amplitude),
+               complex; |β| is the g↔e cavity separation it imprints.
+tw (wait)      idle time [ns] between displacement pulses; the conditional phase
+               accumulates during it, so tw (with α) tunes the achieved |β|.
+r, r2, r3, r4  dimensionless amplitudes of the four displacement sub-pulses --
+               r an overall scale, r2/r3/r4 relative to the first -- tuned so the
+               *deterministic* (state-independent) displacement closes back to the
+               origin despite χ' and Kerr.
+ε  (epsilon)   cavity drive waveform ε(t) [rad/ns].
+ω  (omega)     transmon drive waveform Ω(t); its lone |ω| peak is the echo π-pulse.
+α_g, α_e       classical cavity trajectories conditioned on the transmon being in
+               |g> / |e> (see :mod:`metriq_qudits.physics.alpha_dynamics`).
+χ, χ', K, κ    cavity parameters; δ = χ/2 is the g/e-midpoint frame used to solve
+               the trajectories (see :mod:`metriq_qudits.physics.displaced_frame_model`).
+
+The analytic per-gate quantities λ (residual displacement), θ' (spurious transmon
+phase, corrected by a virtual-Z) and the accumulated β are defined in
+:meth:`ECDPulseBuilder._analytic_ecd_component`.
+"""
+
 import numpy as np
 from scipy.optimize import fmin
 from scipy.signal import find_peaks
@@ -9,12 +45,40 @@ from metriq_qudits.pulses.pulse_models import CircuitPulse, ECDPulse
 
 
 def get_flip_idxs(omega):
+    """Sample indices of the transmon echo π-pulses in the drive magnitude.
+
+    Peaks within 2.5% of the maximum are treated as π-pulse centers; they split
+    an ECD waveform into its pre-/post-echo segments.
+
+    Parameters
+    ----------
+    omega : numpy.ndarray
+        Transmon drive magnitude |Ω(t)| (real, non-negative).
+
+    Returns
+    -------
+    numpy.ndarray of int
+        Indices of the detected echo-pulse peaks.
+    """
     return find_peaks(omega, height=np.max(omega) * 0.975)[0]
 
 
 def single_flip_idx(omega):
-    """Echo π-pulse location within one ECD gate. GRAPE envelopes are not
-    unimodal, so an ambiguous detection must fail loudly."""
+    """Index of the single echo π-pulse in one ECD gate's drive Ω(t).
+
+    Fails loudly unless exactly one peak is found: an ambiguous or multi-echo
+    envelope would break the downstream code that assumes a single echo.
+
+    Parameters
+    ----------
+    omega : numpy.ndarray of complex
+        Transmon drive Ω(t) for one ECD gate (magnitude taken internally).
+
+    Returns
+    -------
+    int
+        Sample index of the echo π-pulse.
+    """
     idxs = get_flip_idxs(np.abs(omega))
     if len(idxs) != 1:
         raise ValueError(f"expected one echo pulse in |omega|, found {len(idxs)} peaks")
@@ -24,19 +88,51 @@ def single_flip_idx(omega):
 class ECDPulseBuilder:
 
     def __init__(self, storages, qubit, buffer_time=0):
-        """
-        Args:
-            storages: list[Storage] — one Storage per cavity mode.
-            qubit: Qubit — shared transmon (single qubit drive ω(t)).
-            buffer_time: extra idle ns inserted around ECD pulses (default 0).
+        """Builder for ECD pulses on one or more cavity modes.
+
+        Parameters
+        ----------
+        storages : list of Storage
+            One :class:`Storage` per cavity mode. ``self.storage`` is the active
+            mode, reset per ECD gate inside :meth:`ecd_circuit`.
+        qubit : Qubit
+            The shared transmon ancilla driven by Ω(t).
+        buffer_time : int, optional
+            Extra idle time [ns] inserted around each ECD pulse (default 0).
         """
         self.storages = storages
         self.storage  = storages[0]  # Active storage, updated per ECD gate in ecd_circuit.
         self.qubit    = qubit
         self.buffer_time = buffer_time
 
-    # Pulse constructor
-    def _construct_cd(self, alpha=20, beta=1, tw=100, r=1, r2=1, r3=1, r4=1): # alpha, r = overall scale, {r2,r3,r4} = relative scale  # buffer_time = extra storage wait time during qubit pi-pulse
+    def _construct_cd(self, alpha=20, beta=1, tw=100, r=1, r2=1, r3=1, r4=1):
+        """Assemble the raw four-pulse ECD cavity and transmon waveforms.
+
+        Lays out the echoed conditional displacement: four cavity displacement
+        sub-pulses (amplitudes ±r_i·α along the β direction) separated by idle
+        gaps, with the transmon echo π-pulse in the middle gap. All sub-pulses
+        point along ``arg(β) + π/2`` so the conditional displacement builds along β.
+
+        Parameters
+        ----------
+        alpha : float, optional
+            Intermediate displacement magnitude (gate speed); see module notation.
+        beta : complex, optional
+            Target conditional displacement; only its phase is used here (the
+            magnitude is reached by tuning alpha/tw in :meth:`_alpha_tw_optimizer`).
+        tw : int, optional
+            Idle samples [ns] between successive displacement pulses.
+        r : float, optional
+            Overall amplitude scale applied to the whole cavity waveform.
+        r2, r3, r4 : float, optional
+            Amplitudes of the 2nd/3rd/4th displacement pulses relative to the
+            first, tuned so the deterministic displacement returns to the origin.
+
+        Returns
+        -------
+        (epsilon, omega) : tuple of numpy.ndarray
+            Cavity drive ε(t) and transmon drive Ω(t), of equal length.
+        """
         storage_unit_displacement_complex = self.storage.pulse.disp_gaussian()
         qubit_pi_rotation_complex = self.qubit.pulse.rotate()
         beta_phase = np.angle(beta) + np.pi/2
@@ -66,6 +162,26 @@ class ECDPulseBuilder:
         return epsilon, omega
 
     def _ecd_trajectory(self, epsilon, omega):
+        """Classical cavity trajectories α_g(t), α_e(t) across one ECD waveform.
+
+        Integrates the mean-field motion (:mod:`metriq_qudits.physics.alpha_dynamics`)
+        in the g/e-midpoint frame (δ = χ/2), restarting at each transmon echo:
+        because the π-pulse swaps g↔e, the ground branch continues from the
+        excited branch's endpoint and vice versa. The final split |α_g − α_e| is
+        the achieved conditional displacement.
+
+        Parameters
+        ----------
+        epsilon : numpy.ndarray of complex
+            Cavity drive ε(t) for the gate.
+        omega : numpy.ndarray
+            Transmon drive Ω(t); its peaks mark the echoes where g/e swap.
+
+        Returns
+        -------
+        (alpha_g, alpha_e) : tuple of numpy.ndarray
+            Conditional cavity trajectories, same length as ``epsilon``.
+        """
         flip_idxs = get_flip_idxs(np.abs(omega))
         chi, chi_prime, self_kerr, kappa = storage_parameters(self.storage)
         delta = chi / 2
