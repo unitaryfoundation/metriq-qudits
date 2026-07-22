@@ -55,6 +55,7 @@ the `metriq-qudits` command or the standalone script:
 
 ```bash
 metriq-qudits --plot-only
+# or
 python scripts/plot_results.py
 ```
 
