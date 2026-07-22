@@ -24,7 +24,7 @@ test = ["pytest>=8"]
 metriq-qudits = "metriq_qudits.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

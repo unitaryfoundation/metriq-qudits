@@ -82,28 +82,28 @@ Choose a different artifact root with `--output-dir /path/to/outputs` or the
 ![ECD-QV pipeline](docs/pipeline_flow.png)
 
 The command-line pipeline begins in
-[`src/metriq_qudits/cli.py`](src/metriq_qudits/cli.py), which runs the following
+[`metriq_qudits/cli.py`](metriq_qudits/cli.py), which runs the following
 stages:
 
 1. **Gate parameter optimization.**
-   [`compilation/compile.py`](src/metriq_qudits/compilation/compile.py)
+   [`compilation/compile.py`](metriq_qudits/compilation/compile.py)
    samples the target unitaries, selects the ECD circuit depth, and coordinates
    compilation. The optimizer itself is implemented in
-   [`compilation/ecd_parameter_finder.py`](src/metriq_qudits/compilation/ecd_parameter_finder.py).
+   [`compilation/ecd_parameter_finder.py`](metriq_qudits/compilation/ecd_parameter_finder.py).
 
 2. **Pulse construction.**
-   [`pulses/pulse_stage.py`](src/metriq_qudits/pulses/pulse_stage.py) converts
+   [`pulses/pulse_stage.py`](metriq_qudits/pulses/pulse_stage.py) converts
    the compiled ECD parameters into physical control pulses using
-   [`pulses/ecd_pulse_builder.py`](src/metriq_qudits/pulses/ecd_pulse_builder.py).
+   [`pulses/ecd_pulse_builder.py`](metriq_qudits/pulses/ecd_pulse_builder.py).
 
 3. **Displaced-frame simulation.**
-   [`simulation/sweep.py`](src/metriq_qudits/simulation/sweep.py) runs the
+   [`simulation/sweep.py`](metriq_qudits/simulation/sweep.py) runs the
    noiseless calculation and optional T1/T2 sweep. The physical model and
    simulator are implemented in
-   [`simulation/displaced_frame_simulator.py`](src/metriq_qudits/simulation/displaced_frame_simulator.py).
+   [`simulation/displaced_frame_simulator.py`](metriq_qudits/simulation/displaced_frame_simulator.py).
 
 4. **Results and plots.**
-   [`plot_results.py`](src/metriq_qudits/plot_results.py) loads the saved
+   [`plot_results.py`](metriq_qudits/plot_results.py) loads the saved
    simulation results and generates the figures under `outputs/plots/`.
 
 ## References
