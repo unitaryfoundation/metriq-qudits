@@ -4,24 +4,35 @@
 
 Requires Python 3.12 or 3.13.
 
-```bash
-git clone https://github.com/unitaryfoundation/metriq-qudits.git
-cd metriq-qudits
-python3 -m venv .venv
-source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e .
-```
+1. Clone the repository:
 
-This installs the standard CPU build of JAX. GPU users should first follow the
-[JAX installation guide](https://docs.jax.dev/en/latest/installation.html) for
-their platform.
+   ```bash
+   git clone https://github.com/unitaryfoundation/metriq-qudits.git
+   cd metriq-qudits
+   ```
 
-Confirm the command is installed and view the available options:
+2. Create and activate a virtual environment:
 
-```bash
-metriq-qudits --help
-```
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
+   ```
+
+3. Install the package. This pulls in the standard CPU build of JAX. GPU users
+   should first follow the
+   [JAX installation guide](https://docs.jax.dev/en/latest/installation.html)
+   for their platform.
+
+   ```bash
+   python -m pip install --upgrade pip
+   python -m pip install -e .
+   ```
+
+4. Confirm the command is installed and view the available options:
+
+   ```bash
+   metriq-qudits --help
+   ```
 
 ## Running the pipeline
 
