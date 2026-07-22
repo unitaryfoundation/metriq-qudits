@@ -2,80 +2,51 @@
 
 ## Installation
 
-The code is currently tested with Python 3.12 and 3.13.
+Requires Python 3.12 or 3.13.
 
-1. Clone the repository and enter its directory:
+```bash
+git clone https://github.com/unitaryfoundation/metriq-qudits.git
+cd metriq-qudits
+python3 -m venv .venv
+source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-   ```bash
-   git clone https://github.com/unitaryfoundation/metriq-qudits.git
-   cd metriq-qudits
-   ```
+This installs the standard CPU build of JAX. GPU users should first follow the
+[JAX installation guide](https://docs.jax.dev/en/latest/installation.html) for
+their platform.
 
-2. Create a virtual environment:
+Confirm the command is installed and view the available options:
 
-   ```bash
-   python3 -m venv .venv
-   ```
+```bash
+metriq-qudits --help
+```
 
-3. Activate the virtual environment.
+## Running the pipeline
 
-   On macOS or Linux:
+Run the smallest configured system without the full noise sweep:
 
-   ```bash
-   source .venv/bin/activate
-   ```
-
-   On Windows PowerShell:
-
-   ```powershell
-   .venv\Scripts\Activate.ps1
-   ```
-
-4. Install the package and its dependencies:
-
-   ```bash
-   python -m pip install --upgrade pip
-   python -m pip install -e .
-   ```
-
-   This installs the standard CPU build of JAX. GPU users should follow the
-   [JAX installation guide](https://docs.jax.dev/en/latest/installation.html)
-   for their platform before installing the remaining requirements.
-
-5. Confirm that the command is installed and view the available options:
-
-   ```bash
-   metriq-qudits --help
-   ```
-
-6. Run the smallest configured system without the full noise sweep:
-
-   ```bash
-   metriq-qudits --configs d4 --skip-sweep
-   ```
+```bash
+metriq-qudits --configs d4 --skip-sweep
+```
 
 Circuit compilation and pulse-level simulation are computationally expensive.
-Set `N_JOBS` to run independent circuits in parallel:
+Set `N_JOBS` to run independent circuits in parallel (`$env:N_JOBS = 8` on
+Windows PowerShell):
 
 ```bash
 N_JOBS=8 metriq-qudits --configs d4 --skip-sweep
 ```
 
-On Windows PowerShell, set the same variable with `$env:N_JOBS = 8` before
-running the Python command.
-
-You can also run the pipeline directly through the script, which accepts the same
-arguments:
+Regenerate result figures from cached results, without rerunning compilation or
+simulation:
 
 ```bash
-python scripts/run_pipeline.py --configs d4 --skip-sweep
+metriq-qudits --plot-only
 ```
 
-Result figures can likewise be regenerated from cached results with:
-
-```bash
-python scripts/plot_results.py
-```
+### Outputs
 
 Generated artifacts are written to a visible `outputs/` directory:
 
@@ -89,14 +60,8 @@ outputs/
 └── plots/
 ```
 
-To choose a different artifact root, use `--output-dir`:
-
-```bash
-metriq-qudits --output-dir /path/to/outputs --configs d4 --skip-sweep
-```
-
-The same default can be set with the `METRIQ_QUDITS_OUTPUT_DIR` environment
-variable.
+Choose a different artifact root with `--output-dir /path/to/outputs` or the
+`METRIQ_QUDITS_OUTPUT_DIR` environment variable.
 
 ## Codebase overview
 
@@ -129,15 +94,17 @@ stages:
 
 ## References
 
-- [Benchmarking the algorithmic reach of a high-Q cavity qudit](https://arxiv.org/abs/2408.13317) 
-   - This paper is the first qudit benchmarking paper from Fermilab. They implement the same protocol and tests as this codebase, except the snap and displacement gateset is used instead of ecd and rotation gateset (what this codebase implements). 
+- [Benchmarking the algorithmic reach of a high-Q cavity qudit](https://arxiv.org/abs/2408.13317)
+  - The first qudit benchmarking paper from Fermilab. It implements the same
+    protocol and tests as this codebase, but with the SNAP-and-displacement gate
+    set rather than the ECD-and-rotation gate set used here.
 - [Fast Universal Control of an Oscillator with Weak Dispersive Coupling to a Qubit](https://arxiv.org/abs/2111.06414)
-   - The primary source for understanding ECD gates. See Fig. 1 for a nice summary, which descirbes the gate's pulse-level decomposition (Fig. 1c) and the ansatz we use (Fig. 1d); The ansatz is a k-layer sequence of alternating rotation and ECD gates. 
-   - Table S1 is the source of the Hamiltonian parameters defined in `pulses/pulse_stage.py`: the dispersive coupling `CHI_KHZ` (χ/2π = 32.8 kHz), `CHI_PRIME_HZ` (χ′ = 2χ₀ = 3 Hz from the quoted χ₀/2π = 1.5 Hz), and `SELF_KERR_HZ` (K = 1 Hz). These parameters also feed into the displaced-frame simulation, where they are incorporated into the Hamiltonian in `simulation/displaced_frame_simulator.py` (Qutip) and `simulation/displaced_frame_simulator_dq.py` (Dynamiqs). 
+  - The primary source for understanding ECD gates and the k-layer ansatz of
+    alternating rotation and ECD gates used here (Fig. 1). Table S1 supplies the
+    Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/pulse_stage.py`.
 - [Crosstalk-Robust Quantum Control in Multimode Bosonic Systems](https://arxiv.org/abs/2403.00275)
-   - This paper provides the theory for the displaced frame Hamiltonian (Eq. B3-5) and its Lindblad (Eq. B6). 
-   - The Hamiltonian is assembled in the `DisplacedFrameSimulator` class (`simulation/displaced_frame_simulator.py`) across `_static_hamiltonian`, `_diag_hamiltonian`, and `_offdiag_hamiltonian`, using the mode coefficients defined in `physics/displaced_frame_model.py`. The Lindblad dissipators (Eq. B6) are built in `_make_c_ops`. The Dynamiqs backend mirrors these in `DisplacedFrameSimulatorDQ` (`simulation/displaced_frame_simulator_dq.py`), with the dissipators in `_make_jump_ops`. 
-   - The classical displaced-frame trajectory α(t) (Eq. B3) is solved in `physics/alpha_dynamics.py`. 
-   - The spurious cavity phase corrections comes from Sec. II — the self-Kerr term φ_SK = 2K∫|α|²dt (Eq. 3) and the second-order dispersive term φ_2D = χ′∫|α|²dt (Eq. 5). They are computed in `_spurious_cavity_phase` (`ECDPulseBuilder` class, `pulses/ecd_pulse_builder.py`) and applied after each ECD gate in `ecd_circuit` when `correct_cavity_phases=True`. 
-
+  - The theory for the displaced-frame Hamiltonian and its Lindblad dissipators,
+    the classical trajectory α(t), and the spurious cavity phase corrections
+    applied after each ECD gate. These are implemented across `simulation/`,
+    `physics/`, and `pulses/ecd_pulse_builder.py`.
 - [Metriq: A Collaborative Platform for Benchmarking Quantum Computers](https://arxiv.org/abs/2603.08680)
