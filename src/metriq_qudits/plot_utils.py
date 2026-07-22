@@ -180,6 +180,87 @@ def plot_metrics_vs_dim(records, out_path: str) -> None:
     plt.close(fig)
 
 
+def plot_compile_summary(compiled_path: str, out_path: str, err_th: float = 0.01) -> None:
+    """Stage-1 compile quality for one config, from the compiled-circuits NPZ.
+
+    Four panels: per-circuit final infidelity and boundary leakage (both colored
+    by the accepted depth k), the |β| distribution across all circuits/layers
+    (the ECD amplitudes that drive pulse duration), and the batched-optimizer
+    convergence traces. Skips silently for an empty cache.
+    """
+    data = np.load(compiled_path)
+    err = data["err"]
+    leakage = data["boundary_leakage"]
+    k_per = data["k_per_circuit"]
+    n_circuits = len(err)
+    if n_circuits == 0:
+        return
+    n_attempted = int(data["n_attempted"]) if "n_attempted" in data.files else None
+
+    beta_mags = np.concatenate([
+        np.abs(data["betas"][i, :ki].ravel()) for i, ki in enumerate(k_per)
+    ])
+    beta_mags = beta_mags[beta_mags > 1e-3]  # drop zero-padding and skipped gates
+
+    k_values = sorted({int(k) for k in k_per})
+    palette = plt.cm.tab10.colors
+    k_color = {k: palette[i % len(palette)] for i, k in enumerate(k_values)}
+    index = np.arange(n_circuits)
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8), constrained_layout=True)
+    ax_err, ax_leak, ax_beta, ax_conv = axes.flat
+
+    for k in k_values:
+        mask = k_per == k
+        ax_err.semilogy(index[mask], err[mask], "o", ms=5, color=k_color[k],
+                        label=f"k={k}" if len(k_values) > 1 else None)
+    ax_err.axhline(err_th, color="darkred", ls="--", lw=1.2, label=f"err_th={err_th:g}")
+    ax_err.set_xlabel("circuit index")
+    ax_err.set_ylabel("compile infidelity")
+    ax_err.set_title("optimizer final error per circuit")
+    ax_err.legend(fontsize=8)
+    ax_err.grid(True, which="both", alpha=0.3)
+
+    for k in k_values:
+        mask = k_per == k
+        ax_leak.semilogy(index[mask], np.maximum(leakage[mask], 1e-12), "o", ms=5,
+                         color=k_color[k])
+    ax_leak.set_xlabel("circuit index")
+    ax_leak.set_ylabel("max top-Fock population")
+    ax_leak.set_title("boundary leakage per circuit")
+    ax_leak.grid(True, which="both", alpha=0.3)
+
+    ax_beta.hist(beta_mags, bins=30, color="tab:blue", alpha=0.75)
+    ax_beta.set_xlabel(r"$|\beta|$")
+    ax_beta.set_ylabel("count")
+    ax_beta.set_title(f"ECD amplitudes, all circuits/layers "
+                      f"(median {np.median(beta_mags):.2f})")
+    ax_beta.grid(True, alpha=0.3)
+
+    if "opt_trace" in data.files and data["opt_trace"].size:
+        stride = int(data["trace_stride"]) if "trace_stride" in data.files else 1
+        for i, row in enumerate(data["opt_trace"]):
+            trace = np.exp(row[~np.isnan(row)])  # stored log-objective -> objective
+            steps = stride * np.arange(1, len(trace) + 1)
+            ax_conv.semilogy(steps, trace, color=k_color[int(k_per[i])], alpha=0.4, lw=1)
+        ax_conv.axhline(err_th, color="darkred", ls="--", lw=1.2)
+        ax_conv.set_xlabel("optimizer step")
+        ax_conv.set_ylabel("batch-best objective")
+        ax_conv.set_title("optimizer convergence")
+        ax_conv.grid(True, which="both", alpha=0.3)
+    else:
+        ax_conv.text(0.5, 0.5, "no opt_trace in cache\n(recompile with --overwrite)",
+                     ha="center", va="center", fontsize=9, color="dimgray")
+        ax_conv.set_axis_off()
+
+    survived = f"{n_circuits}/{n_attempted}" if n_attempted else str(n_circuits)
+    fig.suptitle(f"compile quality  ({os.path.basename(compiled_path)})  "
+                 f"circuits: {survived}", fontsize=11)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
 def plot_noise_heatmaps(record, out_path: str) -> None:
     """HOG/XEB/FID heatmaps over the T1×T2 grid for one config. ``record`` has
     keys d, T1_us, T2_us, and a T1×T2 array per metric."""

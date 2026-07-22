@@ -9,7 +9,12 @@ import matplotlib
 matplotlib.use("Agg")
 import numpy as np
 
-from metriq_qudits.plot_utils import METRICS, plot_metrics_vs_dim, plot_noise_heatmaps
+from metriq_qudits.plot_utils import (
+    METRICS,
+    plot_compile_summary,
+    plot_metrics_vs_dim,
+    plot_noise_heatmaps,
+)
 from metriq_qudits.paths import data_dir, plots_dir
 
 
@@ -46,6 +51,20 @@ def _load_noise_sweeps() -> list[dict]:
 def main() -> None:
     output_plots = plots_dir()
     output_plots.mkdir(parents=True, exist_ok=True)
+
+    compiled_paths = sorted(
+        glob.glob(str(data_dir("compiled_circuits") / "*.npz"))
+    )
+    if compiled_paths:
+        compile_dir = output_plots / "compile"
+        for path in compiled_paths:
+            with np.load(path) as data:
+                d = int(data["d"])
+            out = compile_dir / f"compile_d{d}.png"
+            plot_compile_summary(path, str(out))
+            print(f"  compile quality d={d} -> {out}")
+    else:
+        print("  no compiled circuits found")
 
     noiseless = _load_noiseless()
     if noiseless:
