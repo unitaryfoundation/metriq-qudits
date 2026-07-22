@@ -13,6 +13,7 @@ from metriq_qudits.plot_utils import (
     METRICS,
     plot_compile_summary,
     plot_metrics_vs_dim,
+    plot_min_depth_curve,
     plot_noise_heatmaps,
 )
 from metriq_qudits.paths import data_dir, plots_dir
@@ -63,6 +64,10 @@ def main() -> None:
             out = compile_dir / f"compile_d{d}.png"
             plot_compile_summary(path, str(out))
             print(f"  compile quality d={d} -> {out}")
+
+            depth_out = compile_dir / f"min_depth_d{d}.png"
+            if plot_min_depth_curve(path, str(depth_out)):
+                print(f"  min-depth curve d={d} -> {depth_out}")
     else:
         print("  no compiled circuits found")
 

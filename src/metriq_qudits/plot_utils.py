@@ -261,6 +261,45 @@ def plot_compile_summary(compiled_path: str, out_path: str, err_th: float = 0.01
     plt.close(fig)
 
 
+def plot_min_depth_curve(compiled_path: str, out_path: str, err_th: float = 0.01) -> bool:
+    """Minimum-depth sweep: best compile infidelity versus ECD depth k for every
+    circuit (from the ``k_sweep`` recorded during compilation). The filled marker
+    is each circuit's accepted minimum k. Returns False (writing nothing) when the
+    cache carries no depth sweep.
+    """
+    data = np.load(compiled_path)
+    if "k_sweep" not in data.files or not data["k_sweep"].size:
+        return False
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    plotted = False
+    for rows in data["k_sweep"]:
+        rows = rows[~np.isnan(rows[:, 0])]
+        if not len(rows):
+            continue
+        ax.semilogy(rows[:, 0], np.maximum(rows[:, 1], 1e-12), "-o",
+                    color="tab:blue", ms=3, lw=1, alpha=0.35)
+        ax.semilogy(rows[-1, 0], max(rows[-1, 1], 1e-12), "o",
+                    color="tab:blue", ms=6, zorder=3)
+        plotted = True
+    if not plotted:
+        plt.close(fig)
+        return False
+
+    ax.axhline(err_th, color="darkred", ls="--", lw=1.2, label=f"err_th={err_th:g}")
+    ax.set_xlabel("circuit depth k")
+    ax.set_ylabel("best infidelity at depth k")
+    ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend(fontsize=8)
+    ax.set_title(f"minimum-depth sweep  ({os.path.basename(compiled_path)})")
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    return True
+
+
 def plot_noise_heatmaps(record, out_path: str) -> None:
     """HOG/XEB/FID heatmaps over the T1×T2 grid for one config. ``record`` has
     keys d, T1_us, T2_us, and a T1×T2 array per metric."""

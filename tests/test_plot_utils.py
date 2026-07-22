@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 
 import numpy as np
 
-from metriq_qudits.plot_utils import plot_compile_summary
+from metriq_qudits.plot_utils import plot_compile_summary, plot_min_depth_curve
 
 
 def _write_compiled_npz(path, n=6, k_max=4):
@@ -53,3 +53,28 @@ def test_plot_compile_summary_without_opt_trace(tmp_path):
     out = tmp_path / "compile_no_trace.png"
     plot_compile_summary(str(npz), str(out))
     assert out.exists() and out.stat().st_size > 0
+
+
+def _write_k_sweep_npz(path, n=5):
+    """Write a compiled NPZ carrying a per-circuit depth sweep [depth, infidelity]."""
+    k_sweep = np.full((n, 3, 2), np.nan)
+    for i in range(n):
+        k_sweep[i, :, 0] = [3, 4, 5]
+        k_sweep[i, :, 1] = [0.05, 0.008, 0.004]
+    np.savez(path, d=4, k_sweep=k_sweep)
+
+
+def test_plot_min_depth_curve_creates_figure(tmp_path):
+    npz = tmp_path / "compiled.npz"
+    _write_k_sweep_npz(npz)
+    out = tmp_path / "min_depth.png"
+    assert plot_min_depth_curve(str(npz), str(out)) is True
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_plot_min_depth_curve_skips_without_k_sweep(tmp_path):
+    npz = tmp_path / "compiled.npz"
+    np.savez(npz, d=4)  # no k_sweep field
+    out = tmp_path / "min_depth.png"
+    assert plot_min_depth_curve(str(npz), str(out)) is False
+    assert not out.exists()
