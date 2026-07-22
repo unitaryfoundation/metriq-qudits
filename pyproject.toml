@@ -17,8 +17,14 @@ dependencies = [
     "scipy==1.18.0",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
 [project.scripts]
 metriq-qudits = "metriq_qudits.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
