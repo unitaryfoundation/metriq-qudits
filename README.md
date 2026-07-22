@@ -114,8 +114,9 @@ stages:
     alternating rotation and ECD gates used here (Fig. 1). Table S1 supplies the
     Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/pulse_stage.py`.
 - [Crosstalk-Robust Quantum Control in Multimode Bosonic Systems](https://arxiv.org/abs/2403.00275)
-  - The theory for the displaced-frame Hamiltonian and its Lindblad dissipators,
-    the classical trajectory α(t), and the spurious cavity phase corrections
-    applied after each ECD gate. These are implemented across `simulation/`,
-    `physics/`, and `pulses/ecd_pulse_builder.py`.
+  - The theory for the displaced-frame Hamiltonian (Eqs. B3–B5) and its Lindblad
+    dissipators (Eq. B6), the classical trajectory α(t) (Eq. B3), and the
+    spurious cavity phase corrections applied after each ECD gate (Sec. II,
+    Eqs. 3 and 5). These are implemented across `simulation/`, `physics/`, and
+    `pulses/ecd_pulse_builder.py`.
 - [Metriq: A Collaborative Platform for Benchmarking Quantum Computers](https://arxiv.org/abs/2603.08680)
