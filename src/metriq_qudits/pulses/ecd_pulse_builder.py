@@ -471,8 +471,33 @@ class ECDPulseBuilder:
 
         return epsilon, omega, r, r2, r3, r4, alpha, tw, current_beta, current_disp
 
-    # Analytically computes beta, lambda, and the spurious qubit phase theta' for virtual-Z correction (exact when chi'=K=0).
     def _analytic_ecd_component(self, epsilon, omega):
+        """Closed-form ECD gate quantities in the weak-dispersive limit.
+
+        Exact when χ'=K=0. From the cavity drive and the echo position it builds
+        the qubit sign z(t)=±1 (flipping at each echo) and the conditional phase
+        φ(t) = -(χ/2)·∫z, then integrates the drive against φ to obtain the
+        conditional displacement β, the residual coherent displacement λ, and the
+        spurious transmon phase θ' that a virtual-Z later removes. (Here ``delta``
+        and ``gamma`` are running displacement integrals, not the Hamiltonian δ.)
+
+        Parameters
+        ----------
+        epsilon : numpy.ndarray of complex
+            Cavity drive ε(t) of the gate.
+        omega : numpy.ndarray
+            Transmon drive Ω(t) (used only to locate the single echo).
+
+        Returns
+        -------
+        dict
+            Keys: ``z`` (qubit sign ±1 vs time), ``phi`` (conditional phase φ(t)),
+            ``gamma`` / ``delta`` (running coherent / conditional displacement),
+            ``theta`` (accumulated transmon phase θ(t)), ``correction`` and
+            ``theta_prime`` (spurious qubit phase θ' for the virtual-Z),
+            ``lambda`` = λ (residual displacement) and ``beta`` = β (achieved
+            conditional displacement, = 2·delta[-1]).
+        """
         chi, _, _, _ = storage_parameters(self.storage)
         flip_idxs = [single_flip_idx(omega)]
         pm = +1
@@ -513,6 +538,28 @@ class ECDPulseBuilder:
             alpha=10,
             output=False
     ):
+        """Build the physical waveforms for one ECD gate of amplitude β.
+
+        Seeds the pulse ratios (:meth:`_cost_optimizer`), builds the initial
+        four-pulse waveform, then calibrates the wait time and α
+        (:meth:`_alpha_tw_optimizer`) so the achieved conditional displacement
+        matches |β|.
+
+        Parameters
+        ----------
+        beta : complex, optional
+            Target conditional displacement (the ECD amplitude).
+        alpha : float, optional
+            Starting intermediate displacement magnitude (gate speed).
+        output : bool, optional
+            If True, print optimizer progress.
+
+        Returns
+        -------
+        ECDPulse
+            The cavity / ancilla waveforms and the achieved β, α, wait time, and
+            residual displacement.
+        """
         beta = float(beta) if isinstance(beta, int) else beta
         alpha = float(alpha) if isinstance(alpha, int) else alpha
         alpha = np.abs(alpha)
@@ -537,11 +584,26 @@ class ECDPulseBuilder:
         )
 
     def _spurious_cavity_phase(self, j, alpha_g, alpha_e):
-        """Integrate spurious phase accumulated on cavity mode j during one ECD gate.
+        """Spurious cavity phase accumulated on mode j during one ECD gate.
 
-        Sources (You et al. 2024, Sec. II):
+        A residual per-gate rotation of the cavity from two sources
+        (You et al. 2024, Sec. II):
           - Self-Kerr:             phi_SK = 2 K_j ∫ |α_j|² dt           (Eq. 3)
           - 2nd-order dispersive:  phi_2D = χ'_j ∫ |α_j|² dt            (Eq. 5)
+
+        Parameters
+        ----------
+        j : int
+            Cavity-mode index (selects ``self.storages[j]``).
+        alpha_g, alpha_e : numpy.ndarray of complex
+            Conditional trajectories for the gate; the phase uses their mean
+            photon number ½(|α_g|² + |α_e|²).
+
+        Returns
+        -------
+        float
+            Total spurious phase φ_SK + φ_2D [rad], undone as a virtual cavity
+            rotation.
         """
         alpha_sq = 0.5 * (np.abs(alpha_g) ** 2 + np.abs(alpha_e) ** 2)
         integral = float(np.sum(alpha_sq))  # dt = 1 ns
@@ -557,13 +619,31 @@ class ECDPulseBuilder:
         output=False,
         correct_cavity_phases=False,
     ):
-        """Build cavity and ancilla-drive waveforms for an ECD+R circuit.
+        """Build the cavity and transmon waveforms for a full ECD + rotation circuit.
 
-        betas     : (k, num_modes) array of ECD displacement amplitudes
-        rotations : (k*num_modes + 1, 2) array of [theta, phi] per rotation segment
-        correct_cavity_phases : if True, apply spurious cavity phase corrections
-                                after each ECD gate (You et al. 2024, Sec. II).
-                                Has no effect when False (default).
+        Interleaves, per layer, a transmon rotation R(θ, φ) with an ECD gate on
+        each mode (:meth:`ecd_gate`), tracking the virtual-Z transmon phase
+        between gates and, optionally, correcting the spurious cavity phase.
+
+        Parameters
+        ----------
+        betas : array_like, shape (k, num_modes)
+            Complex ECD amplitude β for each of the k layers and each mode.
+        rotations : array_like, shape (k*num_modes + 1, 2)
+            ``[theta, phi]`` for each transmon rotation segment (one before every
+            ECD plus a final rotation), angles in radians.
+        alpha_CD : float, optional
+            Intermediate displacement magnitude passed to each ECD gate.
+        output : bool, optional
+            If True, print per-gate optimizer progress.
+        correct_cavity_phases : bool, optional
+            If True, undo the spurious self-Kerr / second-order-dispersive cavity
+            phase after each ECD gate (You et al. 2024, Sec. II). Default False.
+
+        Returns
+        -------
+        CircuitPulse
+            Synchronized cavity / ancilla waveforms plus per-gate diagnostics.
         """
         betas     = np.asarray(betas)
         rotations = np.asarray(rotations)
