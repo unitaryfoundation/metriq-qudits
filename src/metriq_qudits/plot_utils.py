@@ -460,6 +460,89 @@ def plot_t1_sweep(records, out_path: str) -> bool:
     return True
 
 
+T2_LOW_TARGET_US = 35.0     # µs — "strong dephasing" reference for the low-T2 slice
+
+
+def plot_t2_sweep(records, out_dir: str) -> int:
+    """For each fixed T₁, HOG (left axis) and XEB (right twin axis) versus qudit
+    dimension d, comparing a low-T₂ (strong dephasing) slice against the
+    T₂ = 2·T₁ slice. One figure per T₁ value that has two *distinct* T₂ levels to
+    compare; T₁ values whose low/high slices collapse to the same T₂ are skipped
+    (that contrast is already carried by the T₁ sweep). Configs must share the
+    reference T₁/T₂ grid. Returns the number of figures written.
+
+    records: list of dicts with keys d, T1_us, T2_us, hog, xeb (T1×T2 arrays).
+    """
+    if not records:
+        return 0
+    ref = records[0]
+    T1 = np.asarray(ref["T1_us"])
+    T2 = np.asarray(ref["T2_us"])
+    compatible = sorted(
+        (r for r in records
+         if np.array_equal(np.asarray(r["T1_us"]), T1)
+         and np.array_equal(np.asarray(r["T2_us"]), T2)),
+        key=lambda r: r["d"],
+    )
+    d_ticks = sorted({r["d"] for r in compatible})
+    os.makedirs(out_dir, exist_ok=True)
+
+    written = 0
+    for it1, t1 in enumerate(T1):
+        it2_hi = int(np.argmin(np.abs(T2 - 2 * t1)))
+        it2_lo = int(np.argmin(np.abs(T2 - min(T2_LOW_TARGET_US, 2 * t1))))
+        if it2_lo == it2_hi:
+            continue  # no distinct low/high T2 to contrast at this T1
+
+        fig, ax_hog = plt.subplots(figsize=(7, 4.5))
+        ax_xeb = ax_hog.twinx()
+        ax_hog.set_xlabel("qudit dimension d")
+        ax_hog.set_ylabel("HOG fraction")
+        ax_xeb.set_ylabel("XEB$_n$")
+        ax_hog.set_title(f"T₂ sweep (T₁ = {t1:.0f} µs)")
+        ax_hog.axhline(HOG_PASS, color="darkred", ls="--", lw=1.5, label="HOG pass (2/3)")
+        ax_hog.grid(True, alpha=0.3)
+
+        slices = (
+            (it2_lo, T2[it2_lo], "tab:blue", "tab:purple"),
+            (it2_hi, T2[it2_hi], "tab:green", "tab:orange"),
+        )
+        any_plotted = False
+        for it2, t2_val, hog_color, xeb_color in slices:
+            d_pts, hog_pts, xeb_pts = [], [], []
+            for r in compatible:
+                h, x = r["hog"][it1, it2], r["xeb"][it1, it2]
+                if not (np.isnan(h) or np.isnan(x)):
+                    d_pts.append(r["d"])
+                    hog_pts.append(h)
+                    xeb_pts.append(x)
+            if not d_pts:
+                continue
+            label = f"T₂ = {t2_val:.0f} µs"
+            ax_hog.plot(d_pts, hog_pts, "o-", color=hog_color, lw=1.8, ms=6,
+                        label=f"HOG: {label}")
+            ax_xeb.plot(d_pts, xeb_pts, "s:", color=xeb_color, lw=1.8, ms=6,
+                        mfc="none", label=f"XEB$_n$: {label}")
+            any_plotted = True
+
+        if not any_plotted:
+            plt.close(fig)
+            continue
+
+        ax_hog.set_xticks(d_ticks)
+        handles = ax_hog.get_legend_handles_labels()
+        extra = ax_xeb.get_legend_handles_labels()
+        ax_hog.legend(handles[0] + extra[0], handles[1] + extra[1],
+                      fontsize=8, loc="best")
+        out_path = os.path.join(out_dir, f"t2_sweep_T1_{t1:.0f}us.png")
+        fig.tight_layout()
+        fig.savefig(out_path, dpi=120)
+        plt.close(fig)
+        written += 1
+
+    return written
+
+
 def plot_noise_heatmaps(record, out_path: str) -> None:
     """HOG/XEB/FID heatmaps over the T1×T2 grid for one config. ``record`` has
     keys d, T1_us, T2_us, and a T1×T2 array per metric."""

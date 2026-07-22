@@ -17,6 +17,7 @@ from metriq_qudits.plot_utils import (
     plot_noise_heatmaps,
     plot_stability_calibration,
     plot_t1_sweep,
+    plot_t2_sweep,
 )
 from metriq_qudits.paths import data_dir, plots_dir
 
@@ -107,6 +108,11 @@ def main() -> None:
         t1_out = output_plots / "t1_sweep.png"
         if plot_t1_sweep(sweeps, str(t1_out)):
             print(f"  T1 sweep ({len(sweeps)} config(s)) -> {t1_out}")
+
+        t2_dir = output_plots / "t2_sweep"
+        n_t2 = plot_t2_sweep(sweeps, str(t2_dir))
+        if n_t2:
+            print(f"  T2 sweep ({n_t2} figure(s)) -> {t2_dir}")
     else:
         print("  no noise-sweep results found (run without --skip-sweep)")
 

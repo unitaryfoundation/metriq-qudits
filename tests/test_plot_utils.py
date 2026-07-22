@@ -15,6 +15,7 @@ from metriq_qudits.plot_utils import (
     plot_min_depth_curve,
     plot_stability_calibration,
     plot_t1_sweep,
+    plot_t2_sweep,
 )
 
 
@@ -161,3 +162,25 @@ def test_plot_t1_sweep_without_diagonal_writes_nothing(tmp_path):
     out = tmp_path / "t1_sweep_none.png"
     assert plot_t1_sweep([rec], str(out)) is False
     assert not out.exists()
+
+
+def test_plot_t2_sweep_writes_one_figure_per_distinct_t1(tmp_path):
+    # Default grid: T1=50 (T2 40 vs 100) and T1=100 (T2 40 vs 200) each contrast
+    # a low/high T2; the smaller T1 values collapse to a single T2 and are skipped.
+    out_dir = tmp_path / "t2"
+    n = plot_t2_sweep([_sweep_record(4), _sweep_record(6)], str(out_dir))
+    assert n == 2
+    assert len(list(out_dir.glob("t2_sweep_T1_*us.png"))) == 2
+
+
+def test_plot_t2_sweep_single_config(tmp_path):
+    out_dir = tmp_path / "t2_single"
+    assert plot_t2_sweep([_sweep_record(4)], str(out_dir)) == 2
+    assert len(list(out_dir.glob("*.png"))) == 2
+
+
+def test_plot_t2_sweep_no_distinct_slices_writes_nothing(tmp_path):
+    out_dir = tmp_path / "t2_none"
+    rec = _sweep_record(4, T1=(5, 10), T2=(10, 20), ceiling=False)
+    assert plot_t2_sweep([rec], str(out_dir)) == 0
+    assert not list(out_dir.glob("*.png"))
