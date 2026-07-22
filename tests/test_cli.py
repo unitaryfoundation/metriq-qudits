@@ -37,6 +37,7 @@ def test_parse_args_defaults():
     assert args.overwrite is False
     assert args.no_phase_correction is False
     assert args.plot is False
+    assert args.plot_only is False
     assert args.backend == "dynamiqs"
     assert args.output_dir is None
 
@@ -137,3 +138,41 @@ def test_main_output_dir_is_applied(monkeypatch, recorded_runs, tmp_path):
     monkeypatch.setattr(cli, "set_output_dir", lambda path: captured.setdefault("path", path))
     cli.main(["--configs", "d4", "--skip-sweep", "--output-dir", str(tmp_path)])
     assert captured["path"] == str(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# main: --plot-only regenerates figures without running the pipeline
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def recorded_plots(monkeypatch):
+    """Replace plot_results.main with a recorder counting invocations."""
+    import metriq_qudits.plot_results as plot_results
+
+    calls = []
+    monkeypatch.setattr(plot_results, "main", lambda: calls.append(True))
+    return calls
+
+
+def test_plot_only_plots_and_skips_pipeline(recorded_runs, recorded_plots):
+    cli.main(["--plot-only"])
+    assert recorded_plots == [True]
+    assert recorded_runs == []
+
+
+def test_plot_only_ignores_configs_and_grids(recorded_runs, recorded_plots):
+    # --plot-only short-circuits before config validation, so a bogus config
+    # and custom grids are simply ignored rather than raising.
+    cli.main(["--plot-only", "--configs", "d99", "--t1", "-5"])
+    assert recorded_plots == [True]
+    assert recorded_runs == []
+
+
+def test_plot_only_applies_output_dir_before_plotting(
+    monkeypatch, recorded_runs, recorded_plots, tmp_path
+):
+    captured = {}
+    monkeypatch.setattr(cli, "set_output_dir", lambda path: captured.setdefault("path", path))
+    cli.main(["--plot-only", "--output-dir", str(tmp_path)])
+    assert captured["path"] == str(tmp_path)
+    assert recorded_plots == [True]

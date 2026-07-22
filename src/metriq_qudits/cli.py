@@ -160,6 +160,11 @@ def _parse_args(argv=None):
         action="store_true",
         help="Regenerate result figures from the cache after the run.",
     )
+    parser.add_argument(
+        "--plot-only",
+        action="store_true",
+        help="Regenerate result figures from the cache and exit without running.",
+    )
     return parser, parser.parse_args(argv)
 
 
@@ -167,6 +172,13 @@ def main(argv=None) -> None:
     parser, args = _parse_args(argv)
     if args.output_dir is not None:
         set_output_dir(args.output_dir)
+    if args.plot_only:
+        print(f"Output directory: {output_dir()}")
+        print("Regenerating result figures from cache ...")
+        from metriq_qudits.plot_results import main as plot_main
+
+        plot_main()
+        return
     if args.configs:
         unknown = [key for key in args.configs if key not in CONFIG_BY_KEY]
         if unknown:
