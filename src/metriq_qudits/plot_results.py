@@ -15,6 +15,7 @@ from metriq_qudits.plot_utils import (
     plot_metrics_vs_dim,
     plot_min_depth_curve,
     plot_noise_heatmaps,
+    plot_stability_calibration,
 )
 from metriq_qudits.paths import data_dir, plots_dir
 
@@ -70,6 +71,16 @@ def main() -> None:
                 print(f"  min-depth curve d={d} -> {depth_out}")
     else:
         print("  no compiled circuits found")
+
+    cal_paths = sorted(glob.glob(str(data_dir("calibration") / "cal_*.npz")))
+    if cal_paths:
+        calibration_dir = output_plots / "calibration"
+        for path in cal_paths:
+            with np.load(path) as data:
+                d = int(data["d"])
+            out = calibration_dir / f"calibration_d{d}.png"
+            plot_stability_calibration(path, str(out))
+            print(f"  stability calibration d={d} -> {out}")
 
     noiseless = _load_noiseless()
     if noiseless:

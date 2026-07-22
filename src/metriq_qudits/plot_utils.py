@@ -300,6 +300,80 @@ def plot_min_depth_curve(compiled_path: str, out_path: str, err_th: float = 0.01
     return True
 
 
+def plot_stability_calibration(cal_path: str, out_path: str) -> None:
+    """Fock-truncation calibration for one config, from a calibration NPZ.
+
+    Left: max (over calibration circuits) stability infidelity versus the test
+    Fock truncation N_test, one curve per candidate buffer count (the shaded band
+    spans min..max across circuits). Right: the summary max stability infidelity
+    that drove the choice, versus buffer count. The stability threshold and the
+    selected buffer count are marked on both.
+    """
+    data = np.load(cal_path)
+    d = int(data["d"])
+    depth = int(data["k"])
+    stab_th = float(data["stability_th"])
+    n_test_extra = np.asarray(data["N_test_extra"])
+    buffers = data["num_buffers_tried"]
+    max_stab = data["max_stab"]
+    curves = data["curves"]
+    best_buffers = int(data["best_buffers"])
+
+    order = np.argsort(buffers)
+    palette = plt.cm.viridis(np.linspace(0.15, 0.9, len(buffers)))
+    buf_color = {int(b): palette[i] for i, b in enumerate(buffers[order])}
+
+    fig, (ax_curve, ax_summary) = plt.subplots(1, 2, figsize=(12, 4.6),
+                                               constrained_layout=True)
+
+    for row in order:
+        nb = int(buffers[row])
+        circuit_curves = curves[row]
+        valid = ~np.all(np.isnan(circuit_curves), axis=1)
+        if not valid.any():
+            continue
+        x = (d + nb) + n_test_extra
+        max_per_point = np.nanmax(circuit_curves[valid], axis=0)
+        is_best = nb == best_buffers
+        ax_curve.semilogy(x, max_per_point, color=buf_color[nb],
+                          marker="o" if is_best else ".",
+                          ms=6 if is_best else 4, lw=1.8 if is_best else 1.1,
+                          label=f"{nb} buf" + ("  (chosen)" if is_best else ""))
+        if valid.sum() > 1:
+            ax_curve.fill_between(x, np.nanmin(circuit_curves[valid], axis=0),
+                                  max_per_point, color=buf_color[nb], alpha=0.15)
+
+    ax_curve.axhline(stab_th, color="black", ls="--", lw=0.8,
+                     label=f"threshold {stab_th:.0e}")
+    ax_curve.set_xlabel(r"$N_\mathrm{test}$ (Fock truncation)")
+    ax_curve.set_ylabel("stability infidelity")
+    ax_curve.set_title("stability vs test truncation")
+    ax_curve.grid(True, which="both", alpha=0.3)
+    ax_curve.legend(fontsize=7, ncol=2)
+
+    b_sorted = buffers[order]
+    s_sorted = max_stab[order]
+    finite = np.isfinite(s_sorted)
+    ax_summary.semilogy(b_sorted[finite], np.maximum(s_sorted[finite], 1e-12),
+                        "-o", color="tab:blue", ms=5)
+    ax_summary.axhline(stab_th, color="black", ls="--", lw=0.8,
+                       label=f"threshold {stab_th:.0e}")
+    ax_summary.axvline(best_buffers, color="tab:green", ls=":", lw=1.5,
+                       label=f"chosen: {best_buffers} buf")
+    ax_summary.set_xlabel("num_buffers")
+    ax_summary.set_ylabel("max stability infidelity")
+    ax_summary.set_title("calibration summary")
+    ax_summary.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    ax_summary.grid(True, which="both", alpha=0.3)
+    ax_summary.legend(fontsize=8)
+
+    fig.suptitle(f"Fock-buffer calibration  d={d}  k={depth}  "
+                 f"({os.path.basename(cal_path)})", fontsize=11)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+
+
 def plot_noise_heatmaps(record, out_path: str) -> None:
     """HOG/XEB/FID heatmaps over the T1×T2 grid for one config. ``record`` has
     keys d, T1_us, T2_us, and a T1×T2 array per metric."""
