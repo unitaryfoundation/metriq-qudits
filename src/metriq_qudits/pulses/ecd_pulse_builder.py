@@ -223,6 +223,25 @@ class ECDPulseBuilder:
      Pulse ratios optimizer
     """
     def _initial_guess(self, alpha, beta):
+        """Analytic starting point for the wait time and pulse ratios.
+
+        Estimates the wait ``tw`` needed for the conditional phase -- rotating at
+        the effective dispersive rate χ_eff = χ + χ'|α|² -- to build the target
+        |β|, plus the ratios r2/r4 that pre-compensate the deterministic
+        displacement for that tw. These seed the numerical :meth:`_cost_optimizer`.
+
+        Parameters
+        ----------
+        alpha : float
+            Intermediate displacement magnitude.
+        beta : complex
+            Target conditional displacement.
+
+        Returns
+        -------
+        (r, r2, r3, r4, tw) : tuple
+            Initial pulse-amplitude ratios (floats) and wait time tw [ns, int].
+        """
         chi, chi_prime, _, _ = storage_parameters(self.storage)
 
         n = np.abs(alpha) ** 2
@@ -236,7 +255,26 @@ class ECDPulseBuilder:
         return r, r2, r3, r4, tw
 
     def _cost_function(self, alpha=20, beta=2, tw=100, r=1, r2=1, r3=1, r4=1, output=False):
+        """Objective for tuning the four displacement-pulse ratios.
 
+        Builds the candidate waveform, integrates its conditional trajectories,
+        and penalizes a gate that does not "close": the residual (deterministic)
+        displacement at the echo and at the end should vanish (α_g + α_e ≈ 0),
+        while each branch should trace a loop of radius |α|. The four penalties
+        are summed.
+
+        Parameters
+        ----------
+        alpha, beta, tw, r, r2, r3, r4
+            Candidate gate parameters; see :meth:`_construct_cd`.
+        output : bool, optional
+            If True, print the individual penalty terms.
+
+        Returns
+        -------
+        float
+            Total cost (0 for an ideal gate).
+        """
         epsilon, omega = self._construct_cd(alpha, beta, tw, r, r2, r3, r4)
 
         flip_idx = int(len(epsilon) / 2)
@@ -264,7 +302,25 @@ class ECDPulseBuilder:
         return total_cost
 
     def _cost_optimizer(self, alpha, beta, output=True):
+        """Tune the pulse ratios (r, r2, r3, r4) by minimizing :meth:`_cost_function`.
 
+        Runs Nelder-Mead (:func:`scipy.optimize.fmin`) from the analytic
+        :meth:`_initial_guess`, at the fixed wait time from that guess.
+
+        Parameters
+        ----------
+        alpha : float
+            Intermediate displacement magnitude.
+        beta : complex
+            Target conditional displacement.
+        output : bool, optional
+            Forwarded to the cost function's per-iteration printing.
+
+        Returns
+        -------
+        (r, r2, r3, r4, tw) : tuple
+            Optimized pulse-amplitude ratios and the (fixed) wait time [ns].
+        """
         # guess ratios:
         initial_ratios = self._initial_guess(alpha=alpha, beta=beta)
         r, r2, r3, r4 = initial_ratios[0], initial_ratios[1], initial_ratios[2], initial_ratios[3]
@@ -281,6 +337,26 @@ class ECDPulseBuilder:
         return r, r2, r3, r4, tw
 
     def _integrated_beta_and_displacement(self, epsilon, omega, output=False):
+        """Achieved conditional displacement and residual displacement of a waveform.
+
+        Integrates the conditional trajectories and reads off, at the gate end,
+        the g↔e separation |α_g − α_e| (the achieved |β|) and the common-mode
+        residual |α_g + α_e| (the leftover deterministic displacement, ideally 0).
+
+        Parameters
+        ----------
+        epsilon : numpy.ndarray of complex
+            Cavity drive ε(t).
+        omega : numpy.ndarray
+            Transmon drive Ω(t) (must contain exactly one echo).
+        output : bool, optional
+            If True, print intermediate displacement diagnostics.
+
+        Returns
+        -------
+        (obtained_beta, obtained_displacement) : tuple of float
+            Achieved |β| and residual |displacement| at the gate end.
+        """
         # note that the trajectories are first solved without kerr.
         flip_idx = single_flip_idx(omega)
         alpha_g, alpha_e = self._ecd_trajectory(epsilon=epsilon, omega=omega)
@@ -307,6 +383,34 @@ class ECDPulseBuilder:
         return obtained_beta, obtained_displacement
 
     def _alpha_tw_optimizer(self, epsilon, omega, alpha, beta, tw, optimization_threshold=1e-3, output=False):
+        """Adjust wait time (then α) until the achieved |β| matches the target.
+
+        Outer calibration loop: measures the achieved |β|, and while it is off by
+        more than ``optimization_threshold`` (relative), shortens the wait ``tw``
+        first and then scales down ``alpha``, re-optimizing the pulse ratios and
+        rebuilding the waveform each iteration.
+
+        Parameters
+        ----------
+        epsilon, omega : numpy.ndarray
+            Initial cavity / transmon waveforms to refine.
+        alpha : float
+            Starting intermediate displacement magnitude.
+        beta : complex
+            Target conditional displacement.
+        tw : int
+            Starting wait time [ns].
+        optimization_threshold : float, optional
+            Relative |β| tolerance at which to stop (default 1e-3).
+        output : bool, optional
+            If True, print per-iteration progress.
+
+        Returns
+        -------
+        tuple
+            ``(epsilon, omega, r, r2, r3, r4, alpha, tw, achieved_beta,
+            residual_displacement)`` for the converged gate.
+        """
         current_beta, current_disp = self._integrated_beta_and_displacement(epsilon, omega, output)
         diff = np.abs(current_beta) - np.abs(beta)
         ratio = np.abs(current_beta) / np.abs(beta)
