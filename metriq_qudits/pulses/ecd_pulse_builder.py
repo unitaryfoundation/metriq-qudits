@@ -758,15 +758,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from metriq_qudits.plot_utils import plot_pulse, plot_trajectory_complex
 
-    storage = Storage(
-        chi_kHz=30.0,
-        chi_prime_Hz=1.0,
-        Ks_Hz=2.0,
-        T1_us=340.0,
-        kappa_kHz=0.0,
-        sigma_ns=15,
-        chop=4,
-    )
+    storage = Storage()
     qubit = Qubit(sigma_ns=10, chop=4)
     builder = ECDPulseBuilder([storage], qubit)
 
