@@ -1,4 +1,24 @@
-"""Command-line interface for the ECD quantum-volume pipeline."""
+"""Command-line interface for the ECD quantum-volume pipeline.
+
+Examples:
+    # Smallest system, skip the T1/T2 sweep (fastest smoke test)
+    metriq-qudits --configs d4 --skip-sweep
+
+    # Run several systems on the default grid
+    metriq-qudits --configs d4 d6 d8
+
+    # Custom T1/T2 sweep grids, in microseconds
+    metriq-qudits --configs d4 --t1 5 10 20 50 --t2 10 20 40 100
+
+    # Run every configured system in parallel and regenerate figures
+    N_JOBS=8 metriq-qudits --plot
+
+    # Force a fresh run, ignoring cached stage outputs
+    metriq-qudits --configs d4 --overwrite
+
+    # Use the QuTiP reference backend and a custom output directory
+    metriq-qudits --configs d4 --backend qutip --output-dir /tmp/run
+"""
 
 from __future__ import annotations
 
@@ -6,6 +26,8 @@ import argparse
 import os
 import platform
 import time
+
+import numpy as np
 
 # JAX can otherwise select an unsupported backend while importing the compiler.
 if platform.system() == "Darwin":
@@ -36,6 +58,8 @@ def run_experiment(
     include_noise_sweep: bool = True,
     overwrite: bool = False,
     n_jobs: int = N_JOBS,
+    t1_values: np.ndarray | None = None,
+    t2_values: np.ndarray | None = None,
 ) -> None:
     """Execute compilation, pulse construction, and simulation."""
     compiled_path = compile_circuits(config, overwrite=overwrite, n_jobs=n_jobs)
@@ -55,6 +79,8 @@ def run_experiment(
         diagnostics_dir=None,
         overwrite=overwrite,
         n_jobs=n_jobs,
+        t1_values=t1_values,
+        t2_values=t2_values,
     )
     if include_noise_sweep:
         run_noise_sweep(
@@ -64,6 +90,8 @@ def run_experiment(
             backend=backend,
             overwrite=overwrite,
             n_jobs=n_jobs,
+            t1_values=t1_values,
+            t2_values=t2_values,
         )
 
 
@@ -92,6 +120,26 @@ def _parse_args(argv=None):
         help="Stop after the noiseless simulation.",
     )
     parser.add_argument(
+        "--t1",
+        nargs="+",
+        type=float,
+        metavar="US",
+        help=(
+            "T1 grid in microseconds. Default: "
+            f"{np.round(T1_VALUES * 1e6).astype(int).tolist()}."
+        ),
+    )
+    parser.add_argument(
+        "--t2",
+        nargs="+",
+        type=float,
+        metavar="US",
+        help=(
+            "T2 grid in microseconds. Default: "
+            f"{np.round(T2_VALUES * 1e6).astype(int).tolist()}."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Ignore cached results and rerun every stage.",
@@ -112,6 +160,11 @@ def _parse_args(argv=None):
         action="store_true",
         help="Regenerate result figures from the cache after the run.",
     )
+    parser.add_argument(
+        "--plot-only",
+        action="store_true",
+        help="Regenerate result figures from the cache and exit without running.",
+    )
     return parser, parser.parse_args(argv)
 
 
@@ -119,6 +172,13 @@ def main(argv=None) -> None:
     parser, args = _parse_args(argv)
     if args.output_dir is not None:
         set_output_dir(args.output_dir)
+    if args.plot_only:
+        print(f"Output directory: {output_dir()}")
+        print("Regenerating result figures from cache ...")
+        from metriq_qudits.plot_results import main as plot_main
+
+        plot_main()
+        return
     if args.configs:
         unknown = [key for key in args.configs if key not in CONFIG_BY_KEY]
         if unknown:
@@ -128,6 +188,11 @@ def main(argv=None) -> None:
         selected = [CONFIG_BY_KEY[key] for key in args.configs]
     else:
         selected = CONFIGS
+
+    t1_values = np.asarray(args.t1) * 1e-6 if args.t1 else T1_VALUES
+    t2_values = np.asarray(args.t2) * 1e-6 if args.t2 else T2_VALUES
+    if np.any(t1_values <= 0) or np.any(t2_values <= 0):
+        parser.error("T1/T2 values must be positive.")
 
     correct_phases = not args.no_phase_correction
     print(
@@ -139,8 +204,8 @@ def main(argv=None) -> None:
         f"Physics: chi/2pi={CHI_KHZ:.1f} kHz  "
         f"K/2pi={SELF_KERR_HZ:.1f} Hz  chi'/2pi={CHI_PRIME_HZ:.1f} Hz"
     )
-    print(f"T1 grid: {T1_VALUES * 1e6} us")
-    print(f"T2 grid: {T2_VALUES * 1e6} us")
+    print(f"T1 grid: {t1_values * 1e6} us")
+    print(f"T2 grid: {t2_values * 1e6} us")
 
     print("Using Gaussian ancilla pulses.")
     start = time.perf_counter()
@@ -159,6 +224,8 @@ def main(argv=None) -> None:
             include_noise_sweep=not args.skip_sweep,
             overwrite=args.overwrite,
             n_jobs=N_JOBS,
+            t1_values=t1_values,
+            t2_values=t2_values,
         )
     print("\n" + "=" * 60)
     print(f"  Done in {time.perf_counter() - start:.1f}s")

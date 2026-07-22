@@ -50,14 +50,17 @@ Windows PowerShell):
 N_JOBS=8 metriq-qudits --configs d4 --skip-sweep
 ```
 
-Regenerate result figures from cached results, without rerunning compilation or
-simulation:
+Result figures can likewise be regenerated from cached results, either through
+the `metriq-qudits` command or the standalone script:
 
 ```bash
 metriq-qudits --plot-only
+python scripts/plot_results.py
 ```
 
-### Outputs
+`--plot-only` reads the cached results under `outputs/` and writes the figures
+without rerunning compilation or simulation. (Use `--plot` instead to regenerate
+the figures at the end of a normal run.)
 
 Generated artifacts are written to a visible `outputs/` directory:
 
