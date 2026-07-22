@@ -14,6 +14,7 @@ from metriq_qudits.plot_utils import (
     plot_compile_summary,
     plot_min_depth_curve,
     plot_stability_calibration,
+    plot_t1_sweep,
 )
 
 
@@ -126,3 +127,37 @@ def test_plot_stability_calibration_tolerates_failed_buffer(tmp_path):
     out = tmp_path / "calibration_failed.png"
     plot_stability_calibration(str(npz), str(out))
     assert out.exists() and out.stat().st_size > 0
+
+
+def _sweep_record(d, T1=(5, 10, 20, 50, 100), T2=(10, 20, 40, 100, 200), ceiling=True):
+    """A noise-sweep record shaped like plot_results._load_noise_sweeps output."""
+    rng = np.random.default_rng(d)
+    T1, T2 = np.array(T1, float), np.array(T2, float)
+    shape = (len(T1), len(T2))
+    rec = {
+        "d": d,
+        "T1_us": T1,
+        "T2_us": T2,
+        "N_u": 25,
+        "hog": rng.uniform(0.6, 0.8, shape),
+        "xeb": rng.uniform(0.7, 0.98, shape),
+        "hog_std": rng.uniform(0.01, 0.05, shape),
+        "xeb_std": rng.uniform(0.01, 0.05, shape),
+    }
+    if ceiling:
+        rec["hog_nl"], rec["xeb_nl"] = 0.77, 0.97
+    return rec
+
+
+def test_plot_t1_sweep_creates_figure(tmp_path):
+    out = tmp_path / "t1_sweep.png"
+    assert plot_t1_sweep([_sweep_record(4), _sweep_record(6)], str(out)) is True
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_plot_t1_sweep_without_diagonal_writes_nothing(tmp_path):
+    # A grid where no T2 sits within tolerance of 2*T1 has no diagonal points.
+    rec = _sweep_record(4, T1=(5, 10), T2=(100, 200), ceiling=False)
+    out = tmp_path / "t1_sweep_none.png"
+    assert plot_t1_sweep([rec], str(out)) is False
+    assert not out.exists()

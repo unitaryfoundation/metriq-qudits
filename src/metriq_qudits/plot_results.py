@@ -16,6 +16,7 @@ from metriq_qudits.plot_utils import (
     plot_min_depth_curve,
     plot_noise_heatmaps,
     plot_stability_calibration,
+    plot_t1_sweep,
 )
 from metriq_qudits.paths import data_dir, plots_dir
 
@@ -44,7 +45,9 @@ def _load_noise_sweeps() -> list[dict]:
                 "d": int(data["d"]),
                 "T1_us": data["T1_values"] * 1e6,
                 "T2_us": data["T2_values"] * 1e6,
+                "N_u": int(data["N_unitaries"]),
                 **{metric: data[metric][:, :, 0] for metric in METRICS},
+                **{f"{metric}_std": data[f"{metric}_std"][:, :, 0] for metric in METRICS},
             }
         )
     return records
@@ -97,6 +100,13 @@ def main() -> None:
             out = heatmap_dir / f"heatmap_d{record['d']}.png"
             plot_noise_heatmaps(record, str(out))
             print(f"  T1/T2 heatmaps d={record['d']} -> {out}")
+
+        ceilings = {r["d"]: (r["hog"], r["xeb"]) for r in noiseless}
+        for record in sweeps:
+            record["hog_nl"], record["xeb_nl"] = ceilings.get(record["d"], (None, None))
+        t1_out = output_plots / "t1_sweep.png"
+        if plot_t1_sweep(sweeps, str(t1_out)):
+            print(f"  T1 sweep ({len(sweeps)} config(s)) -> {t1_out}")
     else:
         print("  no noise-sweep results found (run without --skip-sweep)")
 

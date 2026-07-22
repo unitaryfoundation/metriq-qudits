@@ -374,6 +374,92 @@ def plot_stability_calibration(cal_path: str, out_path: str) -> None:
     plt.close(fig)
 
 
+HOG_PASS = 2.0 / 3.0        # heavy-output-generation pass threshold
+_T2_TOL_US = 0.5            # µs tolerance when matching the T2 = 2*T1 diagonal
+
+
+def _diagonal_indices(T1_us, T2_us):
+    """(it1, it2) index pairs along the physical T2 = 2*T1 diagonal, when the
+    grid actually contains a T2 within tolerance of 2*T1."""
+    pairs = []
+    for it1, t1 in enumerate(T1_us):
+        it2 = int(np.argmin(np.abs(T2_us - 2 * t1)))
+        if abs(T2_us[it2] - 2 * t1) <= _T2_TOL_US:
+            pairs.append((it1, it2))
+    return pairs
+
+
+def plot_t1_sweep(records, out_path: str) -> bool:
+    """HOG and XEB along the physical T2 = 2*T1 diagonal versus qubit T1, one line
+    per config (mean ± SEM). The noiseless ceilings are drawn as dotted lines in
+    the matching color and the HOG pass threshold as a dashed line. Returns False
+    (writing nothing) when no config has any point on the diagonal.
+
+    records: list of dicts with keys d, T1_us, T2_us, hog, xeb, hog_std, xeb_std,
+    N_u, and optional hog_nl / xeb_nl noiseless ceilings.
+    """
+    records = sorted(records, key=lambda r: r["d"])
+    fig, (ax_hog, ax_xeb) = plt.subplots(1, 2, figsize=(12, 4.5))
+    palette = plt.cm.tab10.colors
+    plotted = False
+
+    for i, rec in enumerate(records):
+        T1 = np.asarray(rec["T1_us"])
+        T2 = np.asarray(rec["T2_us"])
+        pairs = _diagonal_indices(T1, T2)
+        if not pairs:
+            continue
+        N_u = max(int(rec.get("N_u", 1)), 1)
+        t1_pts, hog_pts, hog_err, xeb_pts, xeb_err = [], [], [], [], []
+        for it1, it2 in pairs:
+            h, x = rec["hog"][it1, it2], rec["xeb"][it1, it2]
+            if np.isnan(h) or np.isnan(x):
+                continue
+            t1_pts.append(T1[it1])
+            hog_pts.append(h)
+            xeb_pts.append(x)
+            hog_err.append(rec["hog_std"][it1, it2] / np.sqrt(N_u))
+            xeb_err.append(rec["xeb_std"][it1, it2] / np.sqrt(N_u))
+        if not t1_pts:
+            continue
+
+        color = palette[i % len(palette)]
+        label = f"d={rec['d']}"
+        ax_hog.errorbar(t1_pts, hog_pts, yerr=hog_err, color=color, marker="o",
+                        ms=5, lw=1.8, capsize=3, label=label)
+        ax_xeb.errorbar(t1_pts, xeb_pts, yerr=xeb_err, color=color, marker="s",
+                        ms=5, lw=1.8, capsize=3, label=label)
+        if rec.get("hog_nl") is not None:
+            ax_hog.axhline(rec["hog_nl"], color=color, ls=":", lw=1.2, alpha=0.8)
+        if rec.get("xeb_nl") is not None:
+            ax_xeb.axhline(rec["xeb_nl"], color=color, ls=":", lw=1.2, alpha=0.8)
+        plotted = True
+
+    if not plotted:
+        plt.close(fig)
+        return False
+
+    ax_hog.axhline(HOG_PASS, color="darkred", ls="--", lw=1.5, label="HOG pass (2/3)")
+    ax_hog.set_xlabel("qubit T₁ [µs]")
+    ax_hog.set_ylabel("HOG fraction")
+    ax_hog.set_title("HOG at T₂ = 2T₁")
+    ax_hog.grid(True, alpha=0.3)
+    ax_hog.legend(fontsize=8)
+    ax_xeb.set_xlabel("qubit T₁ [µs]")
+    ax_xeb.set_ylabel("XEB$_n$")
+    ax_xeb.set_title("XEB$_n$ at T₂ = 2T₁")
+    ax_xeb.grid(True, alpha=0.3)
+    ax_xeb.legend(fontsize=8)
+
+    fig.suptitle("Coherence sweep: metrics vs T₁ along T₂ = 2T₁  "
+                 "(dotted = noiseless ceiling)", fontsize=10)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    return True
+
+
 def plot_noise_heatmaps(record, out_path: str) -> None:
     """HOG/XEB/FID heatmaps over the T1×T2 grid for one config. ``record`` has
     keys d, T1_us, T2_us, and a T1×T2 array per metric."""
