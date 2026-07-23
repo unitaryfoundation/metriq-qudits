@@ -1,5 +1,12 @@
 # metriq-qudits
 
+`metriq-qudits` is an open-source framework for benchmarking qudit systems,
+developed in parallel with the qubit benchmarks implemented in
+[metriq-gym](https://github.com/unitaryfoundation/metriq-gym). It complements
+the benchmarking ecosystem described in the
+[Metriq paper](https://arxiv.org/abs/2603.08680).
+
+
 ## Installation
 
 Requires Python 3.12 or 3.13.
