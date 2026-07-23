@@ -98,6 +98,7 @@ def _calibrate_buffers(
     config: SystemConfig,
     calibration_depth: int,
     rng: np.random.Generator,
+    n_jobs: int = DEFAULT_N_JOBS,
 ):
     """Find a Fock truncation whose compiled circuits are stable."""
     from metriq_qudits.compilation.ecd_parameter_finder import (
@@ -128,7 +129,7 @@ def _calibrate_buffers(
             )
             for i in range(N_CALIBRATION_CIRCUITS)
         ]
-        compiled = [compile_circuit_worker(job) for job in jobs]
+        compiled = list(parallel_map(compile_circuit_worker, jobs, n_jobs))
 
         curves = np.full((N_CALIBRATION_CIRCUITS, len(N_TEST_EXTRA)), np.nan)
         if any(circuit is not None for circuit in compiled):
@@ -288,7 +289,7 @@ def compile_circuits(
     probe_rng = np.random.default_rng([SEED, config.d, 1, 2])
 
     num_buffers, n_penalize, calibration_targets = _calibrate_buffers(
-        config, calibration_depth, calibration_rng,
+        config, calibration_depth, calibration_rng, n_jobs=n_jobs,
     )
     n_cavity = config.d + num_buffers
     production_start = _probe_minimum_depth(
