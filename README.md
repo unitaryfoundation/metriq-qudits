@@ -124,3 +124,13 @@ stages:
     Eqs. 3 and 5). These are implemented across `simulation/`, `physics/`, and
     `pulses/ecd_pulse_builder.py`.
 - [Metriq: A Collaborative Platform for Benchmarking Quantum Computers](https://arxiv.org/abs/2603.08680)
+  - An open-source platform that integrates three components into a unified
+    benchmarking workflow: [metriq-gym](https://github.com/unitaryfoundation/metriq-gym),
+    a Python framework for defining and running qubit benchmarks
+    across quantum hardware platforms;
+    [metriq-data](https://github.com/unitaryfoundation/metriq-data), a public
+    repository of benchmark results and associated metadata; and the
+    [Metriq website](https://metriq.info/), which presents the collected results
+    for exploration and cross-platform comparison. We plan to
+    publish benchmark results from this qudit codebase on the same website,
+    enabling comparisons between qubit and qudit systems.
