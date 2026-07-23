@@ -10,6 +10,7 @@ All kets are laid out as transmon ⊗ cavity_0 ⊗ … ⊗ cavity_{m-1}:
 from __future__ import annotations
 
 import itertools
+import os
 from dataclasses import dataclass
 from functools import partial
 
@@ -21,6 +22,17 @@ import jax.numpy as jnp
 
 from metriq_qudits.benchmark.gates import _ladder_ops, _embed_cavity, _ecd, _rotation_matrix
 from metriq_qudits.benchmark.circuit_io import CompiledCircuit
+from metriq_qudits.paths import output_dir
+
+# Persistent XLA compilation cache. Compile workers are spawned as fresh
+# processes that would otherwise each re-JIT the same (k, N) graphs; a shared
+# on-disk cache compiles each graph once and reuses it across circuits, workers,
+# and repeated runs. The results are unaffected — only compile latency.
+_JAX_CACHE_DIR = output_dir() / "jax_cache"
+os.makedirs(_JAX_CACHE_DIR, exist_ok=True)
+jax.config.update("jax_compilation_cache_dir", str(_JAX_CACHE_DIR))
+jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
 
 
 def _mode_fock_probs(psi, num_modes: int, N: int) -> jax.Array:
