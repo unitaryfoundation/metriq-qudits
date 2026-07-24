@@ -28,3 +28,6 @@ where = ["."]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: end-to-end test that runs the real JAX optimizer (deselected unless --slow is given)",
+]

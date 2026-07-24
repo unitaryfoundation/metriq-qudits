@@ -16,8 +16,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from metriq_qudits.benchmark.metrics import hog_ideal
-
 METRICS = ("hog", "xeb", "fid")
 
 
@@ -160,14 +158,13 @@ def save_state_diagnostics(alpha, rho_final, out_dir,
 # --------------------------------------------------------------------------- #
 
 def plot_metrics_vs_dim(records, out_path: str) -> None:
-    """Noiseless HOG/XEB/FID versus qudit dimension d, with the ideal Haar-mean
-    HOG reference. ``records`` is a list of dicts with keys d, hog, xeb, fid."""
+    """Noiseless HOG/XEB/FID versus qudit dimension d. ``records`` is a list of
+    dicts with keys d, hog, xeb, fid."""
     records = sorted(records, key=lambda r: r["d"])
     d = np.array([r["d"] for r in records])
     fig, ax = plt.subplots(figsize=(7, 5))
     for metric, marker in zip(METRICS, ("o", "s", "^")):
         ax.plot(d, [r[metric] for r in records], marker + "-", label=metric.upper())
-    ax.plot(d, [hog_ideal(int(x)) for x in d], "k--", lw=1, label="HOG ideal (Haar)")
     ax.set_xlabel("qudit dimension d")
     ax.set_ylabel("metric")
     ax.set_title("Noiseless benchmark metrics vs dimension")
