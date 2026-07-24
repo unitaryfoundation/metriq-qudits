@@ -93,40 +93,6 @@ def compute_hog(p: np.ndarray, q: np.ndarray) -> float:
     return float(np.sum(p[q > np.median(q)]))
 
 
-def harmonic(n: int) -> float:
-    """The n-th harmonic number H_n = Σ_{k=1}^{n} 1/k.
-
-    Parameters
-    ----------
-    n : int
-        Upper index, n ≥ 0 (n = 0 gives an empty sum, 0.0).
-
-    Returns
-    -------
-    float
-        H_n.
-    """
-    return float(np.sum(1.0 / np.arange(1, n + 1)))
-
-
-def hog_ideal(D: int) -> float:
-    """Exact Haar-ensemble mean HOG: 0.5*(1 + H_D - H_{D/2}).
-
-    The theoretical reference a measured HOG is compared against.
-
-    Parameters
-    ----------
-    D : int
-        Computational-subspace dimension, D = d**num_modes.
-
-    Returns
-    -------
-    float
-        Haar-ensemble mean heavy-output-generation probability.
-    """
-    return 0.5 * (1 + harmonic(D) - harmonic(D // 2))
-
-
 def compute_xeb(p: np.ndarray, q: np.ndarray, D: int) -> float:
     """Normalized linear cross-entropy benchmark: 0 = fully mixed, 1 = ideal.
 

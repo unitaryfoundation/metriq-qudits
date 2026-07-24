@@ -9,8 +9,6 @@ from metriq_qudits.benchmark.metrics import (
     computational_indices,
     ecd_probs,
     eval_circuit,
-    harmonic,
-    hog_ideal,
     state_fidelity,
 )
 
@@ -65,23 +63,12 @@ def test_state_fidelity_penalizes_leakage():
     assert state_fidelity(rho, psi, 3, 1, 5) == pytest.approx(0.5)
 
 
-# ── HOG / harmonic ─────────────────────────────────────────────────────────
+# ── HOG ────────────────────────────────────────────────────────────────────
 
 def test_compute_hog_sums_heavy_outputs():
     q = np.array([0.4, 0.3, 0.2, 0.1])   # median 0.25 -> heavy = indices 0,1
     p = np.array([0.25, 0.25, 0.25, 0.25])
     assert compute_hog(p, q) == pytest.approx(0.5)
-
-
-def test_harmonic_numbers():
-    assert harmonic(1) == pytest.approx(1.0)
-    assert harmonic(3) == pytest.approx(1 + 1 / 2 + 1 / 3)
-    assert harmonic(0) == 0.0
-
-
-def test_hog_ideal_small_dimension():
-    # 0.5*(1 + H_2 - H_1) = 0.5*(1 + 1.5 - 1)
-    assert hog_ideal(2) == pytest.approx(0.75)
 
 
 # ── XEB ────────────────────────────────────────────────────────────────────
