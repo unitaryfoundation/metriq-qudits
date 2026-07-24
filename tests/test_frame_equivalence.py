@@ -1,10 +1,4 @@
-"""The displaced-frame and rotating-frame simulators must agree on the same drive.
-
-The rotating-frame backend shares no Hamiltonian code with the displaced frame and
-uses no classical trajectory α, so agreement is an independent check that the
-displaced-frame physics is right. A short synthetic pulse (a qubit superposition
-plus a cavity displacement) exercises the dispersive coupling where the two frames
-could disagree, while staying in a small Fock space so both run fast.
+"""Tests whether displaced-frame and rotating-frame simulators agree.
 """
 
 import numpy as np
