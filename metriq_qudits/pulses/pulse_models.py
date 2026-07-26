@@ -11,7 +11,7 @@ class ECDPulse:
 
     cavity_drive: np.ndarray        # complex ε(t), one sample per ns [rad/ns]
     ancilla_drive: np.ndarray       # complex Ω(t), same length as cavity_drive [rad/ns]
-    peak_displacement: float        # max |α| reached mid-gate (peak photons ≈ this²) [dimensionless]
+    peak_displacement: float        # max |α| reached mid-gate (peak photons ≈ |α|²) [dimensionless]
     wait_time_ns: int               # idle time between displacement sub-pulses [ns]
     achieved_beta: complex          # realized conditional displacement β [dimensionless]
     residual_displacement: complex  # leftover state-independent displacement λ (ideally ≈ 0)

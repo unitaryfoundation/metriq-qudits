@@ -170,8 +170,8 @@ class OptimizerConfig:
     """Search hyperparameters for the ECD parameter optimizer.
 
     stability_th: when set, a converged candidate is accepted only if its max
-    stability infidelity (replay at N + n_test_extra) stays below it. None
-    returns the best converged candidate regardless (used by buffer calibration,
+    stability infidelity (replay at N + n_test_extra) stays below it. Setting it 
+    to None returns the best converged candidate regardless (used by buffer calibration,
     which measures stability curves itself)."""
 
     n_penalize: int = 0

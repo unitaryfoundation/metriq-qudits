@@ -12,6 +12,7 @@ from metriq_qudits.parallel import parallel_map
 from metriq_qudits.paths import data_dir
 from metriq_qudits.system_config import SystemConfig
 
+# User can modify these parameters for their purposes (e.g. lower N_UNITARIES to reduce total compilation time)
 N_UNITARIES = 25
 SEED = 42
 DEFAULT_N_JOBS = int(os.environ.get("N_JOBS", "1"))

@@ -11,7 +11,7 @@ Schema ``metriq.ecd_rot.v1``::
 
     {
       "schema": "metriq.ecd_rot.v1",
-      "meta": {"d": int, "depth": int, "N_cav": int | absent},
+      "meta": {"d": int, "depth": int, "N_cav": int | absent}, 
       "sequence": [
         {"op": "R",   "theta": float, "phi": float},
         {"op": "ECD", "beta": {"re": float, "im": float}},
