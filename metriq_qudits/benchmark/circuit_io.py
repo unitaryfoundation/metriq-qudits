@@ -10,15 +10,15 @@ _ARRAY_KEYS = {"betas", "rotations", "q", "psi", "boundary_leakage", "err",
 
 @dataclass(frozen=True)
 class CompiledCircuit:
-    """Optimized circuit parameters and the target they prepare."""
+    """Optimized circuit parameters and the target state they prepare."""
 
-    betas: np.ndarray              # complex (depth, num_modes)
-    rotations: np.ndarray          # (depth*num_modes + 1, 2) [theta, phi]
-    target_state: np.ndarray       # target amplitudes, shape (d**num_modes,)
-    infidelity: float              # 1 - |<target|prepared>|
-    boundary_leakage: float        # maximum top-Fock-level population
-    optimization_trace: np.ndarray | None = None  # best objective per check-in
-    depth_sweep: np.ndarray | None = None  # rows: [depth, best infidelity]
+    betas: np.ndarray              
+    rotations: np.ndarray          
+    target_state: np.ndarray       
+    infidelity: float             
+    boundary_leakage: float # maximum top-Fock-level population throughout entire circuit execution
+    optimization_trace: np.ndarray | None = None  # best opt cost per check-in (check-in is performed every `check_every' steps)
+    depth_sweep: np.ndarray | None = None  # rows: [depth, best infidelity] (here best infidelity refers to best over all adam branches at the final step)
 
     def __post_init__(self) -> None:
         if self.betas.ndim != 2:

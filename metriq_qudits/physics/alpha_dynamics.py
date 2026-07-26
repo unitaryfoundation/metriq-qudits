@@ -1,23 +1,22 @@
-"""Classical (mean-field) displaced-frame cavity trajectories.
+"""A numerical solver for the displaced-frame cavity trajectories.
 
 A driven cavity dispersively coupled to a transmon ancilla follows, to leading
 order, a *classical* equation of motion for its coherent-state amplitude α(t)
 (You et al., arXiv:2403.00275, Eq. B3). Because the cavity frequency depends on
 the ancilla's state, α(t) splits into two branches: α_g(t) if the ancilla is in
 its ground state |g>, and α_e(t) if it is excited |e>. That state-dependent
-separation is exactly what lets an ECD gate imprint a qubit-conditioned
+separation is what enables an ECD gate to imprint a qubit-conditioned
 displacement on the cavity.
 
 The trajectories are solved once, classically, and then reused by both the pulse
-builder and the quantum simulators -- far cheaper than propagating the full
-cavity+transmon state just to know where the cavity's center of mass goes.
+builder and the quantum simulators.
 
 Symbols (angular frequencies are in rad/ns; rates are in 1/ns):
     α_g, α_e     complex  cavity coherent-state amplitude; |α|² = mean photon number
     ε (epsilon)  complex  cavity drive envelope [rad/ns]
-    δ (delta)    float    detuning of the solving frame from the cavity [rad/ns]
+    δ (delta)    float    frame detuning from the cavity [rad/ns]
     χ (chi)      float    dispersive shift: the ancilla-state-dependent cavity
-                          frequency [rad/ns]; acts only on the excited branch
+                          frequency [rad/ns].
     χ' (chi_prime) float  second-order, photon-number-dependent part of χ [rad/ns]
     K (self_kerr)  float  cavity self-Kerr: photon-number-dependent frequency [rad/ns]
     κ (kappa)    float    cavity photon-loss rate [1/ns] -- a rate, so no 2π factor
