@@ -58,11 +58,16 @@ def run_experiment(
     include_noise_sweep: bool = True,
     overwrite: bool = False,
     n_jobs: int = N_JOBS,
+    optimizer: str = "lbfgs",
+    use_probe: bool = False,
     t1_values: np.ndarray | None = None,
     t2_values: np.ndarray | None = None,
 ) -> None:
     """Execute compilation, pulse construction, and simulation."""
-    compiled_path = compile_circuits(config, overwrite=overwrite, n_jobs=n_jobs)
+    compiled_path = compile_circuits(
+        config, overwrite=overwrite, n_jobs=n_jobs, optimizer=optimizer,
+        use_probe=use_probe,
+    )
 
     pulse_path = build_circuit_pulses(
         compiled_path,
@@ -156,6 +161,24 @@ def _parse_args(argv=None):
         help="Physical simulator backend.",
     )
     parser.add_argument(
+        "--optimizer",
+        choices=["adam", "lbfgs"],
+        default="lbfgs",
+        help=(
+            "Parameter optimizer for compilation. 'lbfgs' (default) uses scipy "
+            "L-BFGS-B, faster on CPU; 'adam' is the batched multistart optimizer."
+        ),
+    )
+    parser.add_argument(
+        "--probe",
+        action="store_true",
+        help=(
+            "Run the depth probe to find a shallower production start depth. "
+            "Off by default: production starts at the calibration depth (k_cal), "
+            "which compiles faster but gives deeper circuits."
+        ),
+    )
+    parser.add_argument(
         "--plot",
         action="store_true",
         help="Regenerate result figures from the cache after the run.",
@@ -197,7 +220,7 @@ def main(argv=None) -> None:
     correct_phases = not args.no_phase_correction
     print(
         f"N_JOBS={N_JOBS}  configs={[config.key for config in selected]}  "
-        f"backend={args.backend}"
+        f"backend={args.backend}  optimizer={args.optimizer}"
     )
     print(f"Output directory: {output_dir()}")
     print(
@@ -224,6 +247,8 @@ def main(argv=None) -> None:
             include_noise_sweep=not args.skip_sweep,
             overwrite=args.overwrite,
             n_jobs=N_JOBS,
+            optimizer=args.optimizer,
+            use_probe=args.probe,
             t1_values=t1_values,
             t2_values=t2_values,
         )

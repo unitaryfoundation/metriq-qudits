@@ -126,6 +126,12 @@ def _objective(p, psi_target, penalty_weight, k, num_modes, N, n_penalize):
     return jnp.log(overlap_loss + penalty_weight * penalty + LOG_EPS)
 
 
+# Scalar value-and-gradient of the objective, used by the L-BFGS optimizer. The
+# scipy driver calls this many times per start, so a single jitted graph (compiled
+# once per (k, N)) is reused across every start and iteration.
+_value_and_grad = jax.jit(jax.value_and_grad(_objective), static_argnums=(3, 4, 5, 6))
+
+
 @partial(jax.jit, static_argnames=("k", "num_modes", "N", "n_penalize", "n_steps"))
 def _adam_chunk(params, m, v, t0, psi_target, penalty_weight, lr,
                 k: int, num_modes: int, N: int, n_penalize: int, n_steps: int):
@@ -174,10 +180,12 @@ class OptimizerConfig:
     to None returns the best converged candidate regardless (used by buffer calibration,
     which measures stability curves itself)."""
 
+    optimizer: str = "lbfgs"      # "lbfgs" (scipy, default) or "adam" (batched multistart)
     n_penalize: int = 0
     penalty_weight: float = 0.0
     err_th: float = 0.01
-    batch_size: int = 256
+    batch_size: int = 256         
+    lbfgs_starts: int = 64        # max L-BFGS restarts; stops at the first accepted candidate
     n_steps: int = 2000
     check_every: int = 100
     lr: float = 0.01
@@ -221,7 +229,62 @@ class ECDParameterFinder:
             depth_sweep=k_sweep,
         )
 
-    def _optimize_at_k(self, target_haar, k: int, N: int, rng, verbose: bool):
+    def _search_at_k_lbfgs(self, target_haar, k: int, N: int, rng, verbose: bool):
+        """Restart-until-accepted scipy L-BFGS-B at fixed depth k: run 
+        L-BFGS from a random start and accept the first candidate that converges 
+        below err_th (and, when stability_th is set, passes the stability test), 
+        restarting up to lbfgs_starts times."""
+        from scipy.optimize import minimize
+
+        cfg        = self.cfg
+        psi_target = jnp.array(_pad(target_haar, N, self.d, self.num_modes))
+        m          = self.num_modes
+        n_beta     = 2 * k * m
+        n_rot      = 2 * (k * m + 1)
+
+        def fun(x):
+            val, grad = _value_and_grad(
+                jnp.asarray(x), psi_target, cfg.penalty_weight, k, m, N, cfg.n_penalize)
+            return float(val), np.asarray(grad, dtype=np.float64)
+
+        def infidelity(x):
+            betas, rotations = _unpack(jnp.asarray(x), k, m)
+            psi_g, _, _ = run_circuit(betas, rotations, N, cfg.n_penalize)
+            return 1.0 - float(jnp.abs(jnp.dot(psi_target.conj(), psi_g)))
+
+        best_infid, guess, opt_trace = np.inf, None, []
+        for s in range(cfg.lbfgs_starts):
+            cold = np.concatenate([
+                rng.standard_normal(n_beta),
+                rng.uniform(0, 2 * np.pi, n_rot),
+            ])
+            x0  = cold if guess is None else (guess + cold) / 2
+            res = minimize(fun, x0, jac=True, method="L-BFGS-B",
+                           options={"maxiter": cfg.n_steps})
+            guess = res.x
+            infid = infidelity(res.x)
+            best_infid = min(best_infid, infid)
+            opt_trace.append(best_infid)
+            if verbose:
+                print(f"      k={k}  lbfgs restart {s + 1:3d}/{cfg.lbfgs_starts}"
+                      f"  err={infid:.2e}  best={best_infid:.2e}", flush=True)
+
+            if infid <= cfg.err_th:
+                if cfg.stability_th is None:
+                    return res.x, best_infid, infid, opt_trace
+                circuit = self._make_circuit(res.x, target_haar, k, N, infid, opt_trace)
+                stab = stability_infidelity(
+                    circuit, target_haar, [N + e for e in cfg.n_test_extra],
+                    self.d, self.num_modes)
+                if float(np.nanmax(stab)) < cfg.stability_th:
+                    return res.x, best_infid, infid, opt_trace
+                if verbose:
+                    print(f"      candidate err={infid:.2e} UNSTABLE"
+                          f" (max stab {float(np.nanmax(stab)):.2e})", flush=True)
+
+        return None, best_infid, None, opt_trace
+
+    def _optimize_at_k_adam(self, target_haar, k: int, N: int, rng, verbose: bool):
         """Batched Adam descent at fixed depth k: a batch of batch_size random
         initializations descends the log-composite objective simultaneously,
         stopping early once MIN_CONVERGED members are below err_th.
@@ -285,7 +348,13 @@ class ECDParameterFinder:
         """Optimize k-layer ECD parameters preparing target_haar in an N-level
         space at a single fixed depth."""
         rng = rng if rng is not None else np.random.default_rng()
-        params, infids, opt_trace = self._optimize_at_k(target_haar, k, N, rng, verbose)
+        if self.cfg.optimizer == "lbfgs":
+            params, _, infid, opt_trace = self._search_at_k_lbfgs(
+                target_haar, k, N, rng, verbose)
+            if params is None:
+                return None
+            return self._make_circuit(params, target_haar, k, N, infid, opt_trace)
+        params, infids, opt_trace = self._optimize_at_k_adam(target_haar, k, N, rng, verbose)
         return self._select(params, infids, opt_trace, target_haar, k, N,
                             verbose=verbose)
 
@@ -299,11 +368,18 @@ class ECDParameterFinder:
         rng     = rng if rng is not None else np.random.default_rng()
         k_sweep = []
         for k in range(k_init, k_max + 1, k_step):
-            params, infids, opt_trace = self._optimize_at_k(target_haar, k, N,
-                                                            rng, verbose)
-            k_sweep.append([float(k), float(infids.min())])
-            circuit = self._select(params, infids, opt_trace, target_haar, k, N,
-                                   k_sweep=np.array(k_sweep), verbose=verbose)
+            if self.cfg.optimizer == "lbfgs":
+                params, best_infid, infid, opt_trace = self._search_at_k_lbfgs(
+                    target_haar, k, N, rng, verbose)
+                k_sweep.append([float(k), float(best_infid)])
+                circuit = None if params is None else self._make_circuit(
+                    params, target_haar, k, N, infid, opt_trace, np.array(k_sweep))
+            else:
+                params, infids, opt_trace = self._optimize_at_k_adam(target_haar, k, N,
+                                                                     rng, verbose)
+                k_sweep.append([float(k), float(infids.min())])
+                circuit = self._select(params, infids, opt_trace, target_haar, k, N,
+                                       k_sweep=np.array(k_sweep), verbose=verbose)
             if circuit is not None:
                 return circuit
         return None
