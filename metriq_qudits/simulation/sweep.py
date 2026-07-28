@@ -16,7 +16,7 @@ from metriq_qudits.pulses.pulse_stage import (
     CHI_PRIME_RAD_S,
     CHI_RAD_S,
     SELF_KERR_RAD_S,
-    make_storages,
+    make_modes,
     physics_metadata,
     physics_metadata_matches,
     variant_suffix,
@@ -51,7 +51,7 @@ def _make_simulator(backend, n_cavity):
         simulator_class = DisplacedFrameSimulator
     return simulator_class(
         cavity_dim=n_cavity,
-        storage=make_storages(1)[0],
+        mode=make_modes(1)[0],
     )
 
 

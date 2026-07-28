@@ -31,39 +31,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from metriq_qudits.pulses.pulse_primitives import Storage
-from metriq_qudits.physics.units import angular_frequency_from_hz, angular_frequency_from_khz
+from metriq_qudits.pulses.drive_envelopes import CavityMode
 
 
-def storage_parameters(storage: Storage) -> tuple[float, float, float, float]:
-    """Device parameters for one cavity mode, converted to simulation units.
-
-    :class:`Storage` holds each parameter as the positive cyclic-frequency
-    magnitude a lab would quote (e.g. χ/2π in kHz); this converts them to the
-    angular frequencies / rate the Hamiltonian uses.
-
-    Parameters
-    ----------
-    storage : Storage
-        The cavity mode's quoted parameters.
-
-    Returns
-    -------
-    (chi, chi_prime, self_kerr, kappa) : tuple of float
-        chi (χ), dispersive shift [rad/ns]; chi_prime (χ'), second-order
-        dispersive shift [rad/ns]; self_kerr, the full Kerr ``K`` [rad/ns] (its
-        Hamiltonian coefficient is ``-K/2``); kappa (κ), cavity photon-loss rate
-        [1/ns], recovered from the quoted κ/2π linewidth ``Storage.kappa_kHz``.
-    """
-    return (
-        angular_frequency_from_khz(storage.chi_kHz),
-        angular_frequency_from_hz(storage.chi_prime_Hz),
-        angular_frequency_from_hz(storage.Ks_Hz),
-        angular_frequency_from_khz(storage.kappa_kHz),
-    )
-
-
-def mode_static_coefficients(storage: Storage) -> tuple[float, float, float, float]:
+def mode_static_coefficients(mode: CavityMode) -> tuple[float, float, float, float]:
     """Time-independent coefficients of the static Hamiltonian operators.
 
     In the displaced frame at the g/e midpoint only a small residual coupling
@@ -71,7 +42,7 @@ def mode_static_coefficients(storage: Storage) -> tuple[float, float, float, flo
 
     Parameters
     ----------
-    storage : Storage
+    mode : CavityMode
         Cavity mode parameters.
 
     Returns
@@ -81,12 +52,12 @@ def mode_static_coefficients(storage: Storage) -> tuple[float, float, float, flo
         χ/2), n̂·n̂_q (dispersive coupling, -χ), â†²â²·n̂_q (second-order dispersive,
         -χ'/2), and â†²â² (self-Kerr, -K/2).
     """
-    chi, chi_prime, self_kerr, _ = storage_parameters(storage)
+    chi, chi_prime, self_kerr, _ = mode.angular_rates()
     return chi / 2.0, -chi, -chi_prime / 2.0, -self_kerr / 2.0
 
 
 def mode_diagonal_coefficients(
-    alpha: np.ndarray, storage: Storage,
+    alpha: np.ndarray, mode: CavityMode,
 ) -> tuple[np.ndarray, ...]:
     """Frequency shifts induced by the classical displacement, per time sample.
 
@@ -98,7 +69,7 @@ def mode_diagonal_coefficients(
     ----------
     alpha : numpy.ndarray of complex
         Classical cavity trajectory α(t) [dimensionless amplitude], one sample per ns.
-    storage : Storage
+    mode : CavityMode
         Cavity mode parameters.
 
     Returns
@@ -108,7 +79,7 @@ def mode_diagonal_coefficients(
         n̂·n̂_q (second-order dispersive shift, -2χ'|α|²), and n̂_q (the dispersive
         plus higher-order shift, -χ|α|² - (χ'/2)|α|⁴).
     """
-    chi, chi_prime, self_kerr, _ = storage_parameters(storage)
+    chi, chi_prime, self_kerr, _ = mode.angular_rates()
     abs2 = np.abs(alpha) ** 2
     return (
         -2.0 * self_kerr * abs2,
@@ -118,7 +89,7 @@ def mode_diagonal_coefficients(
 
 
 def mode_conditional_coefficients(
-    alpha: np.ndarray, storage: Storage,
+    alpha: np.ndarray, mode: CavityMode,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Coefficients of the qubit-conditioned cavity displacement (the ECD term).
 
@@ -131,7 +102,7 @@ def mode_conditional_coefficients(
     ----------
     alpha : numpy.ndarray of complex
         Classical cavity trajectory α(t) [dimensionless amplitude], one sample per ns.
-    storage : Storage
+    mode : CavityMode
         Cavity mode parameters.
 
     Returns
@@ -140,7 +111,7 @@ def mode_conditional_coefficients(
         Time-dependent coefficients [rad/ns] of n̂_q·(â+â†) and n̂_q·i(â†-â), equal
         to -χ·Re α and -χ·Im α respectively.
     """
-    chi, _, _, _ = storage_parameters(storage)
+    chi, _, _, _ = mode.angular_rates()
     return -chi * np.real(alpha), -chi * np.imag(alpha)
 
 

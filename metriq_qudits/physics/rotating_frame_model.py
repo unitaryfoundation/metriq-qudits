@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from metriq_qudits.pulses.pulse_primitives import Storage
+from metriq_qudits.pulses.drive_envelopes import CavityMode
 
 _TWO_PI = 2.0 * np.pi
 
@@ -32,21 +32,21 @@ def _rad_per_ns_from_khz(value_khz: float) -> float:
     return _TWO_PI * value_khz * 1e-6
 
 
-def storage_parameters(storage: Storage) -> tuple[float, float, float, float]:
+def mode_rates(mode: CavityMode) -> tuple[float, float, float, float]:
     """Return ``(chi, chi_prime, self_kerr, kappa)`` in rad/ns.
 
     ``self_kerr`` is the full Kerr ``K`` (its Hamiltonian coefficient is ``-K/2``);
     ``kappa`` is the cavity linewidth ``κ/2π`` converted to a rate.
     """
     return (
-        _rad_per_ns_from_khz(storage.chi_kHz),
-        _rad_per_ns_from_hz(storage.chi_prime_Hz),
-        _rad_per_ns_from_hz(storage.Ks_Hz),
-        _rad_per_ns_from_khz(storage.kappa_kHz),
+        _rad_per_ns_from_khz(mode.chi_kHz),
+        _rad_per_ns_from_hz(mode.chi_prime_Hz),
+        _rad_per_ns_from_hz(mode.kerr_Hz),
+        _rad_per_ns_from_khz(mode.kappa_kHz),
     )
 
 
-def static_coefficients(storage: Storage) -> tuple[float, float, float, float]:
+def static_coefficients(mode: CavityMode) -> tuple[float, float, float, float]:
     """Coefficients of ``(n, n*nq, a†²a²*nq, a†²a²)`` in the undisplaced frame.
 
     For a single qudit (one cavity mode + transmon ancilla). The g/e-midpoint
@@ -59,7 +59,7 @@ def static_coefficients(storage: Storage) -> tuple[float, float, float, float]:
     The transmon anharmonicity term K_q/2·nq(nq−1) is applied separately in the
     simulator's static Hamiltonian (it is an operator term, not a scalar prefactor).
     """
-    chi, chi_prime, self_kerr, _ = storage_parameters(storage)
+    chi, chi_prime, self_kerr, _ = mode_rates(mode)
     return chi / 2.0, -chi, -chi_prime / 2.0, -self_kerr / 2.0
 
 

@@ -16,8 +16,8 @@ sys.path.insert(0, str(REPO_ROOT))
 import numpy as np
 import qutip as qt
 
-from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
-from metriq_qudits.pulses.pulse_stage import make_qubit, make_storages
+from metriq_qudits.pulses.echo_gate_compiler import EchoedDisplacementCompiler
+from metriq_qudits.pulses.pulse_stage import make_ancilla, make_modes
 from metriq_qudits.simulation.displaced_frame_simulator import DisplacedFrameSimulator
 from metriq_qudits.simulation.rotating_frame_simulator import RotatingFrameSimulator
 
@@ -54,9 +54,9 @@ def _build_pulse(layers, seed, alpha_cd):
     betas = (rng.normal(size=(layers, 1)) + 1j * rng.normal(size=(layers, 1))) * 0.9
     rotations = np.column_stack([rng.uniform(0, np.pi, layers + 1),
                                  rng.uniform(0, 2 * np.pi, layers + 1)])
-    builder = ECDPulseBuilder(make_storages(1), make_qubit())
-    return builder.ecd_circuit(betas, rotations, alpha_CD=alpha_cd,
-                               correct_cavity_phases=True)
+    compiler = EchoedDisplacementCompiler(make_modes(1), make_ancilla())
+    return compiler.compile_circuit(betas, rotations, peak_amplitude=alpha_cd,
+                                    correct_cavity_phases=True)
 
 
 def _final_cavity(sim, epsilon, omega, cavity_phase):
@@ -75,7 +75,7 @@ def _truncated(cavity, m):
 
 def main(argv=None) -> int:
     args = _parse_args(argv)
-    storage = make_storages(1)[0]
+    mode = make_modes(1)[0]
 
     pulse = _build_pulse(args.layers, args.seed, args.alpha_cd)
     epsilon = pulse.cavity_drives[0]
@@ -85,8 +85,8 @@ def main(argv=None) -> int:
     print(f"layers={args.layers}  pulse length={len(epsilon)} ns  "
           f"peak |alpha|^2 ~ {peak_photons:.0f}")
 
-    disp = DisplacedFrameSimulator(cavity_dim=args.n_disp, storage=storage, qubit_dim=3)
-    rot = RotatingFrameSimulator(cavity_dim=args.n_rot, storage=storage, qubit_dim=3)
+    disp = DisplacedFrameSimulator(cavity_dim=args.n_disp, mode=mode, qubit_dim=3)
+    rot = RotatingFrameSimulator(cavity_dim=args.n_rot, mode=mode, qubit_dim=3)
 
     cav_d, pops_d, top_d = _final_cavity(disp, epsilon, omega, cavity_phase)
     cav_r, pops_r, top_r = _final_cavity(rot, epsilon, omega, cavity_phase)

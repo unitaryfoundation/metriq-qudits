@@ -50,6 +50,14 @@ class CircuitWaveforms:
 
     final_cavity_phases: np.ndarray
 
+    @property
+    def num_modes(self):
+        return len(self.cavity_drives)
+
+    @property
+    def peak_displacement(self):
+        return max(self.peak_displacements, default=0.0)
+
 
 @dataclass
 class WeakDispersiveSummary:

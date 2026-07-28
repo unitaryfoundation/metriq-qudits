@@ -17,12 +17,12 @@ import numpy as np
 import qutip as qt
 from scipy.interpolate import CubicSpline
 
-from metriq_qudits.pulses.pulse_primitives import Storage
+from metriq_qudits.pulses.drive_envelopes import CavityMode
 from metriq_qudits.physics.rotating_frame_model import (
     ancilla_drive_coefficients,
     cavity_drive_coefficients,
     static_coefficients,
-    storage_parameters,
+    mode_rates,
 )
 
 K_Q_DEFAULT_MHZ = -200.0  # transmon anharmonicity K_q/2π [MHz]
@@ -43,13 +43,13 @@ class RotatingFrameSimulator:
     def __init__(
         self,
         cavity_dim: int,
-        storage: Storage,
+        mode: CavityMode,
         qubit_dim: int = 3,
         K_q_MHz: float = K_Q_DEFAULT_MHZ,
     ):
         self.cavity_dim = cavity_dim
         self.qubit_dim = qubit_dim
-        self.storage = storage
+        self.mode = mode
         self.dims = [cavity_dim, qubit_dim]
 
         a = embed(qt.destroy(cavity_dim), 0, self.dims)
@@ -68,7 +68,7 @@ class RotatingFrameSimulator:
         self.K_q = _angular_frequency_from_mhz(K_q_MHz)
 
     def _static_hamiltonian(self) -> qt.Qobj:
-        c_n, c_nnq, c_qnq, c_q = static_coefficients(self.storage)
+        c_n, c_nnq, c_qnq, c_q = static_coefficients(self.mode)
         H = c_n * self.n + c_nnq * self.n * self.n_q
         H += c_qnq * self.quartic * self.n_q + c_q * self.quartic
         H += self.K_q / 2.0 * self.n_q * (self.n_q - self.I_op)
@@ -96,7 +96,7 @@ class RotatingFrameSimulator:
         # γ1 D[q̂] + 2γφ D[n̂_q] + κ D[â]  (same collapse structure as the
         # displaced backend, rebuilt here independently)
         c_ops = []
-        _, _, _, kappa = storage_parameters(self.storage)
+        _, _, _, kappa = mode_rates(self.mode)
         if kappa > 0:
             c_ops.append(np.sqrt(kappa) * self.a)
         if T1_us is not None:

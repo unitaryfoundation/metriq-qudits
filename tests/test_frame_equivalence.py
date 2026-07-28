@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from metriq_qudits.pulses.pulse_stage import make_storages
+from metriq_qudits.pulses.pulse_stage import make_modes
 from metriq_qudits.simulation.displaced_frame_simulator import DisplacedFrameSimulator
 from metriq_qudits.simulation.rotating_frame_simulator import RotatingFrameSimulator
 
@@ -42,13 +42,13 @@ def _renormalized_block(cavity, m):
     "omega, epsilon", [(p[1], p[2]) for p in _PULSES], ids=[p[0] for p in _PULSES],
 )
 def test_displaced_and_rotating_frames_agree(omega, epsilon):
-    storage = make_storages(1)[0]
+    mode = make_modes(1)[0]
     disp = _final_cavity(
-        DisplacedFrameSimulator(cavity_dim=N_DISP, storage=storage, qubit_dim=3),
+        DisplacedFrameSimulator(cavity_dim=N_DISP, mode=mode, qubit_dim=3),
         epsilon, omega,
     )
     rot = _final_cavity(
-        RotatingFrameSimulator(cavity_dim=N_ROT, storage=storage, qubit_dim=3),
+        RotatingFrameSimulator(cavity_dim=N_ROT, mode=mode, qubit_dim=3),
         epsilon, omega,
     )
 

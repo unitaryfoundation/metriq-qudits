@@ -20,11 +20,11 @@ import jax.numpy as jnp
 import dynamiqs as dq
 from scipy.interpolate import CubicSpline
 
-from metriq_qudits.pulses.pulse_primitives import Storage
+from metriq_qudits.pulses.drive_envelopes import CavityMode
 from metriq_qudits.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
 from metriq_qudits.physics.displaced_frame_model import (
     ancilla_drive_coefficients, mode_conditional_coefficients,
-    mode_diagonal_coefficients, mode_static_coefficients, storage_parameters,
+    mode_diagonal_coefficients, mode_static_coefficients,
 )
 from metriq_qudits.physics.units import angular_frequency_from_mhz
 
@@ -47,13 +47,13 @@ class DisplacedFrameSimulatorDQ:
     def __init__(
         self,
         cavity_dim: int,
-        storage: Storage,
+        mode: CavityMode,
         qubit_dim: int = 3,
         K_q_MHz: float = K_Q_DEFAULT_MHZ,
     ):
         self.cavity_dim = cavity_dim
         self.qubit_dim = qubit_dim
-        self.storage = storage
+        self.mode = mode
         self.dims = [cavity_dim, qubit_dim]
 
         destroy = lambda d: np.diag(np.sqrt(np.arange(1, d)), k=1).astype(complex)
@@ -67,7 +67,7 @@ class DisplacedFrameSimulatorDQ:
         self.K_q  = angular_frequency_from_mhz(K_q_MHz)
 
     def _solve_alpha(self, epsilon: np.ndarray) -> np.ndarray:
-        chi, _, self_kerr, kappa = storage_parameters(self.storage)
+        chi, _, self_kerr, kappa = self.mode.angular_rates()
         alpha, _ = alpha_from_epsilon_finite_difference(
             np.asarray(epsilon, dtype=complex), delta=chi / 2,
             self_kerr=self_kerr, kappa=kappa)
@@ -78,7 +78,7 @@ class DisplacedFrameSimulatorDQ:
         adag = a.conj().T
         n = adag @ a
         quartic = adag @ adag @ a @ a
-        c_n, c_nnq, c_qnq, c_q = mode_static_coefficients(self.storage)
+        c_n, c_nnq, c_qnq, c_q = mode_static_coefficients(self.mode)
         H = c_n * n + c_nnq * n @ self.n_q
         H = H + c_qnq * quartic @ self.n_q + c_q * quartic
         H = H + self.K_q / 2.0 * self.n_q @ (self.n_q - self.I_op)
@@ -101,7 +101,7 @@ class DisplacedFrameSimulatorDQ:
     def _diag_hamiltonian(self, alpha: np.ndarray, tlist) -> list:
         a = self.a
         n = a.conj().T @ a
-        c_n, c_nnq, c_nq = mode_diagonal_coefficients(alpha, self.storage)
+        c_n, c_nnq, c_nq = mode_diagonal_coefficients(alpha, self.mode)
         return [
             self._modulated(tlist, c_n, n),
             self._modulated(tlist, c_nnq, n @ self.n_q),
@@ -111,7 +111,7 @@ class DisplacedFrameSimulatorDQ:
     def _offdiag_hamiltonian(self, alpha: np.ndarray, omega: np.ndarray, tlist) -> list:
         a = self.a
         adag = a.conj().T
-        c_x, c_y = mode_conditional_coefficients(alpha, self.storage)
+        c_x, c_y = mode_conditional_coefficients(alpha, self.mode)
         drive_i, drive_q = ancilla_drive_coefficients(omega)
         return [
             self._modulated(tlist, c_x, self.n_q @ (a + adag)),
@@ -123,7 +123,7 @@ class DisplacedFrameSimulatorDQ:
     def _make_jump_ops(self, T1_us=None, T2_us=None) -> list:
         # Eq. B6: γ1 D[q̂] + 2γφ D[n̂_q] + κ D[â]
         jump_ops = []
-        _, _, _, kappa = storage_parameters(self.storage)
+        _, _, _, kappa = self.mode.angular_rates()
         if kappa > 0:
             jump_ops.append(dq.asqarray(np.sqrt(kappa) * self.a))
         if T1_us is not None:
