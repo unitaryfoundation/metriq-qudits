@@ -62,3 +62,13 @@ def test_displaced_and_rotating_frames_agree(omega, epsilon):
     m = min(N_DISP, N_ROT)
     fidelity = qt.fidelity(_renormalized_block(disp, m), _renormalized_block(rot, m))
     assert fidelity > 0.999
+
+
+def test_static_hamiltonians_match_across_frames():
+    # The two frames inline their Hamiltonian coefficients independently, but the
+    # drive-independent (alpha = 0) part must be identical. Guards the two copies
+    # against drifting apart.
+    mode = make_modes(1)[0]
+    disp = DisplacedFrameSimulator(cavity_dim=N_DISP, mode=mode, qubit_dim=3)
+    rot = RotatingFrameSimulator(cavity_dim=N_DISP, mode=mode, qubit_dim=3)
+    assert (disp._static_hamiltonian() - rot._static_hamiltonian()).norm() < 1e-12
