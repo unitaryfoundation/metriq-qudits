@@ -53,6 +53,21 @@ def test_parse_args_rejects_unknown_backend():
         cli._parse_args(["--backend", "cirq"])
 
 
+def test_parse_args_n_jobs_defaults_to_env_value():
+    _, args = cli._parse_args([])
+    assert args.n_jobs == cli.N_JOBS
+
+
+def test_parse_args_n_jobs_flag_overrides_default():
+    _, args = cli._parse_args(["--n-jobs", "4"])
+    assert args.n_jobs == 4
+
+
+def test_parse_args_rejects_non_integer_n_jobs():
+    with pytest.raises(SystemExit):
+        cli._parse_args(["--n-jobs", "eight"])
+
+
 def test_parse_args_store_true_flags():
     _, args = cli._parse_args(
         ["--skip-sweep", "--overwrite", "--no-phase-correction", "--plot"]
@@ -131,6 +146,18 @@ def test_main_includes_sweep_by_default(recorded_runs):
     _, kwargs = recorded_runs[0]
     assert kwargs["include_noise_sweep"] is True
     assert kwargs["correct_phases"] is True
+
+
+def test_main_n_jobs_flag_passed_to_run_experiment(recorded_runs):
+    cli.main(["--configs", "d4", "--skip-sweep", "--n-jobs", "4"])
+    _, kwargs = recorded_runs[0]
+    assert kwargs["n_jobs"] == 4
+
+
+def test_main_n_jobs_defaults_to_module_value(recorded_runs):
+    cli.main(["--configs", "d4", "--skip-sweep"])
+    _, kwargs = recorded_runs[0]
+    assert kwargs["n_jobs"] == cli.N_JOBS
 
 
 def test_main_output_dir_is_applied(monkeypatch, recorded_runs, tmp_path):
