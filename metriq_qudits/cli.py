@@ -12,6 +12,7 @@ Examples:
 
     # Run every configured system in parallel and regenerate figures
     N_JOBS=8 metriq-qudits --plot
+    metriq-qudits --plot --n-jobs 8   # same, via the CLI flag
 
     # Force a fresh run, ignoring cached stage outputs
     metriq-qudits --configs d4 --overwrite
@@ -161,6 +162,16 @@ def _parse_args(argv=None):
         help="Physical simulator backend.",
     )
     parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=N_JOBS,
+        metavar="N",
+        help=(
+            "Number of parallel worker processes for compilation and simulation. "
+            "Defaults to the N_JOBS environment variable (or 1)."
+        ),
+    )
+    parser.add_argument(
         "--optimizer",
         choices=["adam", "lbfgs"],
         default="lbfgs",
@@ -219,7 +230,7 @@ def main(argv=None) -> None:
 
     correct_phases = not args.no_phase_correction
     print(
-        f"N_JOBS={N_JOBS}  configs={[config.key for config in selected]}  "
+        f"N_JOBS={args.n_jobs}  configs={[config.key for config in selected]}  "
         f"backend={args.backend}  optimizer={args.optimizer}"
     )
     print(f"Output directory: {output_dir()}")
@@ -246,7 +257,7 @@ def main(argv=None) -> None:
             backend=args.backend,
             include_noise_sweep=not args.skip_sweep,
             overwrite=args.overwrite,
-            n_jobs=N_JOBS,
+            n_jobs=args.n_jobs,
             optimizer=args.optimizer,
             use_probe=args.probe,
             t1_values=t1_values,
