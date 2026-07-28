@@ -50,11 +50,10 @@ metriq-qudits --configs d4 --skip-sweep
 ```
 
 Circuit compilation and pulse-level simulation are computationally expensive.
-Set `N_JOBS` to run independent circuits in parallel (`$env:N_JOBS = 8` on
-Windows PowerShell):
+Use `--n-jobs` to run independent circuits in parallel:
 
 ```bash
-N_JOBS=8 metriq-qudits --configs d4 --skip-sweep
+metriq-qudits --configs d4 --skip-sweep --n-jobs 8
 ```
 
 Result figures can likewise be regenerated from cached results, either through
