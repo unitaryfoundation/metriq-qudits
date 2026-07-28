@@ -113,6 +113,8 @@ stages:
    [`plot_results.py`](metriq_qudits/plot_results.py) loads the saved
    simulation results and generates the figures under `outputs/plots/`.
 
+#### Calibration
+
 The dashed box is a one-time **calibration phase** that runs before stage 1.
 [`compile.py`](metriq_qudits/compilation/compile.py) sweeps the number of Fock
 buffer levels above the qudit dimension and keeps the smallest count whose
