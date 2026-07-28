@@ -1,10 +1,11 @@
 """Command-line interface for the ECD quantum-volume pipeline.
 
 Examples:
-    # Smallest system, skip the T1/T2 sweep (fastest smoke test)
+    # Smallest system, skip the T1/T2 sweep
     metriq-qudits --configs d4 --skip-sweep
 
     # Run several systems on the default grid
+
     metriq-qudits --configs d4 d6 d8
 
     # Custom T1/T2 sweep grids, in microseconds

@@ -21,12 +21,7 @@ import dynamiqs as dq
 from scipy.interpolate import CubicSpline
 
 from metriq_qudits.pulses.drive_envelopes import CavityMode
-from metriq_qudits.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
-from metriq_qudits.physics.displaced_frame_model import (
-    ancilla_drive_coefficients, mode_conditional_coefficients,
-    mode_diagonal_coefficients, mode_static_coefficients,
-)
-from metriq_qudits.physics.units import angular_frequency_from_mhz
+from metriq_qudits.pulses.conditional_dynamics import DispersiveRates, evolve_pair
 
 K_Q_DEFAULT_MHZ = -200.0  # transmon anharmonicity K_q/2π [MHz]
 
@@ -64,13 +59,12 @@ class DisplacedFrameSimulatorDQ:
         self.sigy = 1j * (self.q_op.conj().T - self.q_op)
 
         self.I_op = jnp.eye(int(np.prod(self.dims)), dtype=complex)
-        self.K_q  = angular_frequency_from_mhz(K_q_MHz)
+        self.K_q  = 2.0 * np.pi * K_q_MHz * 1e-3  # MHz -> rad/ns
 
     def _solve_alpha(self, epsilon: np.ndarray) -> np.ndarray:
         chi, _, self_kerr, kappa = self.mode.angular_rates()
-        alpha, _ = alpha_from_epsilon_finite_difference(
-            np.asarray(epsilon, dtype=complex), delta=chi / 2,
-            self_kerr=self_kerr, kappa=kappa)
+        rates = DispersiveRates(delta=chi / 2, kerr=self_kerr, kappa=kappa)
+        alpha, _ = evolve_pair(np.asarray(epsilon, dtype=complex), rates)
         return alpha
 
     def _static_hamiltonian(self) -> jnp.ndarray:
@@ -78,7 +72,10 @@ class DisplacedFrameSimulatorDQ:
         adag = a.conj().T
         n = adag @ a
         quartic = adag @ adag @ a @ a
-        c_n, c_nnq, c_qnq, c_q = mode_static_coefficients(self.mode)
+        # static residual coupling in the g/e-midpoint frame:
+        # (chi/2) n - chi n*nq - (chi'/2) a†²a²*nq - (K/2) a†²a²
+        chi, chi_prime, self_kerr, _ = self.mode.angular_rates()
+        c_n, c_nnq, c_qnq, c_q = chi / 2.0, -chi, -chi_prime / 2.0, -self_kerr / 2.0
         H = c_n * n + c_nnq * n @ self.n_q
         H = H + c_qnq * quartic @ self.n_q + c_q * quartic
         H = H + self.K_q / 2.0 * self.n_q @ (self.n_q - self.I_op)
@@ -101,7 +98,12 @@ class DisplacedFrameSimulatorDQ:
     def _diag_hamiltonian(self, alpha: np.ndarray, tlist) -> list:
         a = self.a
         n = a.conj().T @ a
-        c_n, c_nnq, c_nq = mode_diagonal_coefficients(alpha, self.mode)
+        # frequency shifts induced by the classical displacement alpha(t)
+        chi, chi_prime, self_kerr, _ = self.mode.angular_rates()
+        abs2 = np.abs(alpha) ** 2
+        c_n   = -2.0 * self_kerr * abs2
+        c_nnq = -2.0 * chi_prime * abs2
+        c_nq  = -chi * abs2 - (chi_prime / 2.0) * abs2 ** 2
         return [
             self._modulated(tlist, c_n, n),
             self._modulated(tlist, c_nnq, n @ self.n_q),
@@ -111,8 +113,10 @@ class DisplacedFrameSimulatorDQ:
     def _offdiag_hamiltonian(self, alpha: np.ndarray, omega: np.ndarray, tlist) -> list:
         a = self.a
         adag = a.conj().T
-        c_x, c_y = mode_conditional_coefficients(alpha, self.mode)
-        drive_i, drive_q = ancilla_drive_coefficients(omega)
+        # qubit-conditioned cavity displacement (the ECD term): -chi * alpha
+        chi = self.mode.angular_rates()[0]
+        c_x, c_y = -chi * np.real(alpha), -chi * np.imag(alpha)
+        drive_i, drive_q = np.real(omega), np.imag(omega)
         return [
             self._modulated(tlist, c_x, self.n_q @ (a + adag)),
             self._modulated(tlist, c_y, self.n_q @ (1j * (adag - a))),

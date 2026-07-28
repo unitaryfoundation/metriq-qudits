@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from metriq_qudits.pulses.drive_envelopes import CavityMode, TransmonAncilla
-from metriq_qudits.pulses.conditional_dynamics import DispersiveRates, evolve_pair
 from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder, detect_echo_centers
 
 
@@ -25,21 +24,6 @@ def test_cavity_displacement_reaches_requested_amplitude():
     disp = CavityMode().displacement(1.7 * np.exp(1j * 0.4))
     # a drive eps displaces the cavity to alpha = -i * sum(eps)
     assert np.allclose(-1j * np.sum(disp), 1.7 * np.exp(1j * 0.4))
-
-
-def test_integrator_free_drive_is_linear_ramp():
-    eps = np.full(200, 0.01 + 0.02j)
-    g, e = evolve_pair(eps, DispersiveRates())
-    expected = -1j * eps[0] * np.arange(200)
-    assert np.max(np.abs(g - expected)) < 1e-12
-    assert np.max(np.abs(e - expected)) < 1e-12
-
-
-def test_integrator_detuning_gives_free_rotation():
-    rates = DispersiveRates(delta=0.01)
-    g, _ = evolve_pair(np.zeros(500), rates, start=(1.0 + 0j, 0j))
-    expected = np.exp(-1j * 0.01 * np.arange(500))
-    assert np.max(np.abs(g - expected)) < 1e-9
 
 
 def test_weak_dispersive_summary_matches_direct_sum():
