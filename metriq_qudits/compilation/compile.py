@@ -7,7 +7,7 @@ import os
 import numpy as np
 from scipy.stats import unitary_group
 
-from metriq_qudits.benchmark.circuit_io import save_circuits
+from metriq_qudits.benchmark.circuit_io import load_circuits, save_circuits
 from metriq_qudits.parallel import parallel_map
 from metriq_qudits.paths import data_dir
 from metriq_qudits.system_config import SystemConfig
@@ -74,12 +74,14 @@ def _make_job(
     n_penalize,
     seed,
     stability_threshold=None,
+    optimizer="lbfgs",
 ):
     # Deferred import keeps JAX (pulled in by ecd_parameter_finder) out of this
     # module's load path, preserving the spawn-worker startup cost.
     from metriq_qudits.compilation.ecd_parameter_finder import CompileJob, OptimizerConfig
 
     opt = OptimizerConfig(
+        optimizer=optimizer,
         n_penalize=n_penalize,
         penalty_weight=PENALTY_WEIGHT,
         err_th=ERROR_THRESHOLD,
@@ -95,11 +97,64 @@ def _make_job(
     )
 
 
+def calibration_path(config: SystemConfig, calibration_depth: int) -> str:
+    return str(data_dir("calibration") / f"cal_{config.key}_k{calibration_depth}.npz")
+
+
+def _load_calibration(config: SystemConfig, calibration_depth: int):
+    """Return (best_buffers, best_n_penalize) from a cached calibration, or None.
+
+    Only reuse the cache when the hyperparameters that determine the result still
+    match, so tweaking a constant transparently forces a recalibration."""
+    path = calibration_path(config, calibration_depth)
+    if not os.path.exists(path):
+        return None
+    data = np.load(path)
+    if (
+        int(data["d"]) != config.d
+        or float(data["penalty_weight"]) != PENALTY_WEIGHT
+        or float(data["stability_th"]) != STABILITY_THRESHOLD
+    ):
+        return None
+    return int(data["best_buffers"]), int(data["best_n_pen"])
+
+
+def _load_probe(
+    config: SystemConfig,
+    depth_floor: int,
+    n_cavity: int,
+    n_penalize: int,
+    optimizer: str,
+):
+    """Return the cached production start depth from a saved probe, or None.
+
+    Reuse only when the inputs that determine the probe still match, so a change to
+    the calibration output, penalty, stability target, or optimizer forces a re-probe."""
+    path = probe_path(config)
+    if not os.path.exists(path):
+        return None
+    circuits, meta = load_circuits(path)
+    if not circuits:
+        return None
+    if (
+        int(meta.get("d", -1)) != config.d
+        or int(meta.get("N_cav", -1)) != n_cavity
+        or int(meta.get("n_penalize", -1)) != n_penalize
+        or float(meta.get("penalty_weight", -1.0)) != PENALTY_WEIGHT
+        or float(meta.get("stability_th", -1.0)) != STABILITY_THRESHOLD
+        or str(meta.get("optimizer", "")) != optimizer
+    ):
+        return None
+    depths = sorted(circuit.depth for circuit in circuits)
+    return max(depth_floor, depths[0] - 1)
+
+
 def _calibrate_buffers(
     config: SystemConfig,
     calibration_depth: int,
     rng: np.random.Generator,
     n_jobs: int = DEFAULT_N_JOBS,
+    optimizer: str = "lbfgs",
 ):
     """Find a Fock truncation whose compiled circuits are stable."""
     from metriq_qudits.compilation.ecd_parameter_finder import (
@@ -126,7 +181,7 @@ def _calibrate_buffers(
         jobs = [
             _make_job(
                 targets[i], config, calibration_depth, calibration_depth,
-                n_cavity, n_penalize, seed + i,
+                n_cavity, n_penalize, seed + i, optimizer=optimizer,
             )
             for i in range(N_CALIBRATION_CIRCUITS)
         ]
@@ -174,7 +229,7 @@ def _calibrate_buffers(
         )
 
     tried = np.asarray(tried, dtype=np.int32)
-    path = data_dir("calibration") / f"cal_{config.key}_k{calibration_depth}.npz"
+    path = calibration_path(config, calibration_depth)
     np.savez(
         path,
         num_buffers_tried=tried[:, 0],
@@ -205,6 +260,7 @@ def _probe_minimum_depth(
     n_penalize: int,
     rng: np.random.Generator,
     n_jobs: int,
+    optimizer: str = "lbfgs",
 ) -> int:
     """Probe calibration targets so production avoids repeatedly hard depths."""
     from metriq_qudits.compilation.ecd_parameter_finder import compile_circuit_worker
@@ -223,6 +279,7 @@ def _probe_minimum_depth(
             n_penalize,
             int(rng.integers(0, 2**31)),
             stability_threshold=STABILITY_THRESHOLD,
+            optimizer=optimizer,
         )
         for target in targets
     ]
@@ -252,6 +309,8 @@ def _probe_minimum_depth(
             "trace_stride": CHECK_EVERY,
             "n_penalize": n_penalize,
             "penalty_weight": PENALTY_WEIGHT,
+            "stability_th": STABILITY_THRESHOLD,
+            "optimizer": optimizer,
         },
         path,
     )
@@ -269,6 +328,8 @@ def compile_circuits(
     *,
     overwrite: bool = False,
     n_jobs: int = DEFAULT_N_JOBS,
+    optimizer: str = "lbfgs",
+    use_probe: bool = False,
 ) -> str:
     """Compile a reproducible ensemble and return its versioned cache path."""
     from metriq_qudits.compilation.ecd_parameter_finder import compile_circuit_worker
@@ -280,34 +341,75 @@ def compile_circuits(
 
     depth_floor = parameter_counting_floor(config)
     calibration_depth = heuristic_depth(config)
-    output_path = compiled_path(config, depth_floor)
-    if os.path.exists(output_path) and not overwrite:
-        print(f"  [compile] cached -> {os.path.basename(output_path)}")
-        return output_path
 
     calibration_rng = np.random.default_rng([SEED, config.d, 1, 0])
     production_rng = np.random.default_rng([SEED, config.d, 1, 1])
     probe_rng = np.random.default_rng([SEED, config.d, 1, 2])
 
-    num_buffers, n_penalize, calibration_targets = _calibrate_buffers(
-        config, calibration_depth, calibration_rng, n_jobs=n_jobs,
-    )
+    cached = None if overwrite else _load_calibration(config, calibration_depth)
+    if cached is not None:
+        num_buffers, n_penalize = cached
+        # Regenerate the same calibration targets the probe needs. These come from
+        # a deterministically seeded RNG, so this reproduces them without rerunning
+        # any optimization.
+        calibration_targets = [
+            sample_target(config, calibration_rng)
+            for _ in range(N_CALIBRATION_CIRCUITS)
+        ]
+        print(
+            "\n  [compile] using cached calibration  "
+            f"{config.key} k{calibration_depth}  "
+            f"num_buffers={num_buffers}  n_pen={n_penalize}"
+        )
+    else:
+        num_buffers, n_penalize, calibration_targets = _calibrate_buffers(
+            config, calibration_depth, calibration_rng, n_jobs=n_jobs,
+            optimizer=optimizer,
+        )
     n_cavity = config.d + num_buffers
-    production_start = _probe_minimum_depth(
-        calibration_targets,
-        config,
-        depth_floor,
-        calibration_depth,
-        n_cavity,
-        n_penalize,
-        probe_rng,
-        n_jobs,
-    )
+    if not use_probe:
+        # Skip the probe and start production at the calibration depth. That depth
+        # is chosen to be comfortably deep, so most targets converge on the first k
+        # instead of burning attempts on shallow depths that fail.
+        production_start = calibration_depth
+        print(
+            "\n  [compile] depth probe disabled  "
+            f"{config.key}  k_start={production_start} (= k_cal)"
+        )
+    else:
+        cached_start = (
+            None if overwrite
+            else _load_probe(config, depth_floor, n_cavity, n_penalize, optimizer)
+        )
+        if cached_start is not None:
+            production_start = cached_start
+            print(
+                "\n  [compile] using cached depth probe  "
+                f"{config.key}  k_start={production_start}"
+            )
+        else:
+            production_start = _probe_minimum_depth(
+                calibration_targets,
+                config,
+                depth_floor,
+                calibration_depth,
+                n_cavity,
+                n_penalize,
+                probe_rng,
+                n_jobs,
+                optimizer=optimizer,
+            )
+    output_path = compiled_path(config, production_start)
+    if os.path.exists(output_path) and not overwrite:
+        print(f"  [compile] cached -> {os.path.basename(output_path)}")
+        return output_path
+
     maximum_depth = calibration_depth * K_MAX_FACTOR
+    sizing = f"batch={BATCH_SIZE}" if optimizer == "adam" else "restart-until-converged"
     print(
         "\n  [compile] production  "
         f"N_cav={n_cavity}  k_start={production_start}  k_max={maximum_depth}  "
-        f"N_unitaries={N_UNITARIES}  batch={BATCH_SIZE}  N_JOBS={n_jobs}"
+        f"N_unitaries={N_UNITARIES}  optimizer={optimizer}  {sizing}  N_JOBS={n_jobs}"
     )
 
     max_attempts = RESAMPLE_CAP * N_UNITARIES
@@ -325,6 +427,7 @@ def compile_circuits(
                 n_penalize,
                 int(production_rng.integers(0, 2**31)),
                 stability_threshold=STABILITY_THRESHOLD,
+                optimizer=optimizer,
             )
             for _ in range(n_new)
         ]
@@ -352,7 +455,7 @@ def compile_circuits(
         compiled,
         {
             "d": config.d,
-            "k": depth_floor,
+            "k": production_start,
             "k_start": production_start,
             "num_modes": 1,
             "ansatz": "haar",

@@ -17,6 +17,12 @@
         align=center, font=\large,
         line width=1.2pt
     },
+    prep/.style={
+        draw, dashed, rectangle, rounded corners=4pt,
+        minimum width=7.2cm, minimum height=1.1cm,
+        align=center, font=\small,
+        line width=1.0pt
+    },
     arrow/.style={
         ->, -{Stealth[length=8pt]},
         line width=1.2pt
@@ -26,23 +32,31 @@
 
 \node[font=\Large\bfseries] (title) {ECD--QV Pipeline};
 
-\node[box, below=0.7cm of title] (gate) {
+\node[prep, below=0.6cm of title] (calib) {
+    Fock-buffer calibration \emph{(cached)} \\[1pt]
+    depth probe \emph{(optional, \texttt{--probe})}
+};
+
+\node[box, below=1.4cm of calib] (gate) {
     Gate Parameter Optimizer \\[3pt]
-    \small\texttt{ECDParameterFinder} $\cdot$ batched Adam \\[-1pt]
+    \small\texttt{ECDParameterFinder} $\cdot$ L-BFGS (restart) / Adam \\[-1pt]
     \small \Nunitaries\ Haar targets $\cdot$ ideal ECD model
 };
 
 \node[box, below=2.4cm of gate] (pulse) {
     Pulse Builder \\[3pt]
     \small\texttt{ECDPulseBuilder} $\cdot$ solve $\alpha(t)$ ODE \\[-1pt]
-    \small virtual-Z correction $\cdot$ cavity phase
+    \small virtual-Z correction $\cdot$ Kerr/$\chi'$ correction
 };
 
 \node[box, below=2.4cm of pulse] (sim) {
     Displaced Frame Simulation \\[3pt]
-    \small\texttt{DisplacedFrameSimulator} $\cdot$ QuTiP / dynamiqs \\[-1pt]
+    \small\texttt{DisplacedFrameSimulator} $\cdot$ dynamiqs (default) / QuTiP \\[-1pt]
     \small T1/T2 noise sweep $\cdot$ HOG \& XEB metrics
 };
+
+\draw[arrow] (calib.south) -- (gate.north)
+    node[midway, right=0.3cm, lbl] {$N_{\mathrm{cav}}$, $k_{\mathrm{start}}$};
 
 \draw[arrow] (gate.south) -- (pulse.north)
     node[midway, right=0.3cm, lbl] {$\{\beta_j,\,\theta_j\}$ per ECD layer};

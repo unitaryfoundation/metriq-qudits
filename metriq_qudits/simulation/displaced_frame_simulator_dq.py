@@ -31,7 +31,7 @@ from metriq_qudits.physics.units import angular_frequency_from_mhz
 K_Q_DEFAULT_MHZ = -200.0  # transmon anharmonicity K_q/2π [MHz]
 
 _MESOLVE_OPTIONS = dq.Options(progress_meter=False)
-_MESOLVE_METHOD  = dq.method.Tsit5(rtol=1e-8, atol=1e-10, max_steps=10_000_000)
+_MESOLVE_METHOD  = dq.method.Tsit5(rtol=1e-6, atol=1e-8, max_steps=10_000_000)
 
 
 def _embed(op: np.ndarray, idx: int, dims: list[int]) -> jnp.ndarray:

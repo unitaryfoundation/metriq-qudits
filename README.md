@@ -114,6 +114,17 @@ stages:
    [`plot_results.py`](metriq_qudits/plot_results.py) loads the saved
    simulation results and generates the figures under `outputs/plots/`.
 
+The dashed box is a one-time **calibration phase** that runs before stage 1.
+[`compile.py`](metriq_qudits/compilation/compile.py) sweeps the number of Fock
+buffer levels above the qudit dimension and keeps the smallest count whose
+compiled circuits stay stable when replayed at larger truncations. The result is
+cached under `outputs/calibration/` and reused automatically on later runs.
+Production then starts at a generous "known-comfortable" depth by default. Add
+`--probe` to instead search for a shallower start depth, which compiles more
+slowly but yields shorter pulses and faster simulation. Use `--overwrite` to force
+a fresh calibration and `--optimizer {lbfgs,adam}` to choose the parameter
+optimizer (L-BFGS by default).
+
 ## References
 
 - [Benchmarking the algorithmic reach of a high-Q cavity qudit](https://arxiv.org/abs/2408.13317)
