@@ -4,7 +4,7 @@
 import numpy as np
 import pytest
 
-from metriq_qudits.pulses.echo_gate_compiler import EchoedDisplacementCompiler
+from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
 from metriq_qudits.pulses.pulse_stage import make_ancilla, make_modes
 from metriq_qudits.simulation.displaced_frame_simulator_dq import DisplacedFrameSimulatorDQ
 
@@ -21,7 +21,7 @@ def _random_pulse(seed=0):
         rng.uniform(0, np.pi, DEPTH + 1), rng.uniform(0, 2 * np.pi, DEPTH + 1),
     ])
     mode = make_modes(1)[0]
-    pulse = EchoedDisplacementCompiler([mode], make_ancilla()).compile_circuit(
+    pulse = ECDPulseBuilder([mode], make_ancilla()).compile_circuit(
         betas=betas, rotations=rotations, peak_amplitude=10, correct_cavity_phases=True,
     )
     return mode, pulse

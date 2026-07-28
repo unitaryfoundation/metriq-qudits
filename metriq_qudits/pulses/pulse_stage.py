@@ -11,7 +11,7 @@ from metriq_qudits.benchmark.circuit_io import load_circuits
 from metriq_qudits.parallel import parallel_map
 from metriq_qudits.paths import data_dir
 from metriq_qudits.pulses.drive_envelopes import CavityMode, TransmonAncilla
-from metriq_qudits.pulses.echo_gate_compiler import CircuitWaveforms, EchoedDisplacementCompiler
+from metriq_qudits.pulses.ecd_pulse_builder import CircuitWaveforms, ECDPulseBuilder
 from metriq_qudits.pulses.pulse_io import load_pulses, save_pulses
 from metriq_qudits.system_config import SystemConfig
 
@@ -84,7 +84,7 @@ def pulse_path(config: SystemConfig, compiled_metadata: dict, correct_phases: bo
 
 def _build_one_pulse(args) -> CircuitWaveforms:
     betas, rotations, correct_phases = args
-    compiler = EchoedDisplacementCompiler(make_modes(1), make_ancilla())
+    compiler = ECDPulseBuilder(make_modes(1), make_ancilla())
     return compiler.compile_circuit(
         betas=betas,
         rotations=rotations,
@@ -173,7 +173,7 @@ def save_gate_trajectory_diagnostics(compiled_path: str, output_dir: str) -> Non
     from metriq_qudits.plot_utils import save_conditional_trajectory_diag
 
     compiled, _ = load_circuits(compiled_path)
-    compiler = EchoedDisplacementCompiler(make_modes(1), make_ancilla())
+    compiler = ECDPulseBuilder(make_modes(1), make_ancilla())
     for circuit_index, circuit in enumerate(compiled):
         betas = np.atleast_1d(circuit.betas[:, 0])
         nonzero = np.where(np.abs(betas) > 1e-3)[0]

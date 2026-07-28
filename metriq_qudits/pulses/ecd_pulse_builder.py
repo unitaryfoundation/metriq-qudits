@@ -1,795 +1,417 @@
-"""Build physical control pulses for ECD (echoed conditional displacement) gates.
-
-An ECD gate displaces the cavity by an amount that depends on the transmon
-("ancilla") state -- the entangling primitive of the ECD + rotation gate set
-(Eickbusch et al., arXiv:2111.06414, Fig. 1). It is realized as four cavity
-displacement sub-pulses split by a transmon π-pulse ("echo"): displace out, flip
-the transmon so ground/excited swap, displace back. The echo cancels the
-state-independent displacement and much of the dephasing, leaving the desired
-qubit-conditioned displacement β. A full circuit (:meth:`ECDPulseBuilder.ecd_circuit`)
-interleaves these ECD gates with transmon rotations R(θ, φ), following the k-layer
-ansatz of Eickbusch et al. Fig. 1d.
-
-Notation
---------
-α  (alpha)     large intermediate displacement the cavity is driven to mid-gate;
-               sets the gate speed (bigger α reaches β faster). [dimensionless]
-β  (beta)      target conditional displacement of the gate (the ECD amplitude),
-               complex; |β| is the g↔e cavity separation it imprints.
-tw (wait)      idle time [ns] between displacement pulses; the conditional phase
-               accumulates during it, so tw (with α) tunes the achieved |β|.
-r, r2, r3, r4  dimensionless amplitudes of the four displacement sub-pulses --
-               r an overall scale, r2/r3/r4 relative to the first -- tuned so the
-               *deterministic* (state-independent) displacement closes back to the
-               origin despite χ' and Kerr.
-ε  (epsilon)   cavity drive waveform ε(t) [rad/ns].
-ω  (omega)     transmon drive waveform Ω(t); its lone |ω| peak is the echo π-pulse.
-α_g, α_e       classical cavity trajectories conditioned on the transmon being in
-               |g> / |e> (see :mod:`metriq_qudits.physics.alpha_dynamics`).
-χ, χ', K, κ    cavity parameters; δ = χ/2 is the g/e-midpoint frame used to solve
-               the trajectories (see :mod:`metriq_qudits.physics.displaced_frame_model`).
-
-The analytic per-gate quantities λ (residual displacement), θ' (spurious transmon
-phase, corrected by a virtual-Z) and the accumulated β are defined in
-:meth:`ECDPulseBuilder._analytic_ecd_component`.
-"""
+from dataclasses import dataclass, field, replace
 
 import numpy as np
-from scipy.optimize import fmin
-from scipy.signal import find_peaks
+from scipy.optimize import minimize
 
-from metriq_qudits.pulses.pulse_primitives import Storage, Qubit
-from metriq_qudits.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
-from metriq_qudits.physics.displaced_frame_model import storage_parameters
-from metriq_qudits.pulses.pulse_models import CircuitPulse, ECDPulse
+from metriq_qudits.pulses.conditional_dynamics import DispersiveRates, evolve_with_echoes
+from metriq_qudits.pulses.drive_envelopes import CavityMode, TransmonAncilla
 
 
-def get_flip_idxs(omega):
-    """Sample indices of the transmon echo π-pulses in the drive magnitude.
-
-    Peaks within 2.5% of the maximum are treated as π-pulse centers; they split
-    an ECD waveform into its pre-/post-echo segments.
-
-    Parameters
-    ----------
-    omega : numpy.ndarray
-        Transmon drive magnitude |Ω(t)| (real, non-negative).
-
-    Returns
-    -------
-    numpy.ndarray of int
-        Indices of the detected echo-pulse peaks.
-    """
-    return find_peaks(omega, height=np.max(omega) * 0.975)[0]
+LOBE_SIGNS = (1.0, -1.0, -1.0, 1.0)
 
 
-def single_flip_idx(omega):
-    """Index of the single echo π-pulse in one ECD gate's drive Ω(t).
+def detect_echo_centers(ancilla_drive, level=0.95):
+    magnitude = np.abs(np.asarray(ancilla_drive))
+    if magnitude.size == 0 or magnitude.max() == 0.0:
+        return []
+    hot = np.flatnonzero(magnitude >= level * magnitude.max())
+    runs = np.split(hot, np.flatnonzero(np.diff(hot) > 1) + 1)
+    return [int(run[np.argmax(magnitude[run])]) for run in runs]
 
-    Fails loudly unless exactly one peak is found: an ambiguous or multi-echo
-    envelope would break the downstream code that assumes a single echo.
 
-    Parameters
-    ----------
-    omega : numpy.ndarray of complex
-        Transmon drive Ω(t) for one ECD gate (magnitude taken internally).
+@dataclass(frozen=True)
+class GateRecipe:
+    peak: float
+    wait_ns: int
+    weights: tuple
+    direction: complex
 
-    Returns
-    -------
-    int
-        Sample index of the echo π-pulse.
-    """
-    idxs = get_flip_idxs(np.abs(omega))
-    if len(idxs) != 1:
-        raise ValueError(f"expected one echo pulse in |omega|, found {len(idxs)} peaks")
-    return int(idxs[0])
+
+@dataclass
+class GateWaveforms:
+    cavity_drive: np.ndarray
+    ancilla_drive: np.ndarray
+    echo_sample: int
+    peak_displacement: float
+    wait_time_ns: int
+    achieved_beta: float
+    residual_displacement: float
+
+
+@dataclass
+class CircuitWaveforms:
+    cavity_drives: tuple
+    ancilla_drive: np.ndarray
+    peak_displacements: tuple = ()
+    wait_times_ns: tuple = ()
+    ancilla_phases: tuple = ()
+    achieved_betas: tuple = ()
+    final_cavity_phases: np.ndarray = field(default_factory=lambda: np.array([]))
+
+    def __post_init__(self):
+        lengths = {len(self.ancilla_drive), *(len(x) for x in self.cavity_drives)}
+        if len(lengths) != 1:
+            raise ValueError("all circuit drive arrays must have the same length")
+        if self.final_cavity_phases.size not in {0, len(self.cavity_drives)}:
+            raise ValueError("one final cavity phase is required per mode")
+
+    @property
+    def num_modes(self):
+        return len(self.cavity_drives)
+
+    @property
+    def peak_displacement(self):
+        return max(self.peak_displacements, default=0.0)
+
+
+@dataclass
+class WeakDispersiveSummary:
+    qubit_sign: np.ndarray
+    conditional_phase: np.ndarray
+    running_displacement: np.ndarray
+    running_conditional: np.ndarray
+    qubit_phase: np.ndarray
+    theta_prime: float
+    residual_displacement: complex
+    beta: complex
 
 
 class ECDPulseBuilder:
+    def __init__(
+        self,
+        modes,
+        ancilla,
+        pad_ns=0,
+        rate_extractor=None,
+        beta_tolerance=1e-3,
+        max_calibration_rounds=40,
+    ):
+        self.modes = list(modes) if isinstance(modes, (list, tuple)) else [modes]
+        self.ancilla = ancilla
+        self.pad_ns = int(pad_ns)
+        self._extract = rate_extractor or (lambda mode: mode.angular_rates())
+        self.beta_tolerance = float(beta_tolerance)
+        self.max_calibration_rounds = int(max_calibration_rounds)
 
-    def __init__(self, storages, qubit, buffer_time=0):
-        """Builder for ECD pulses on one or more cavity modes.
 
-        Parameters
-        ----------
-        storages : list of Storage
-            One :class:`Storage` per cavity mode. ``self.storage`` is the active
-            mode, reset per ECD gate inside :meth:`ecd_circuit`.
-        qubit : Qubit
-            The shared transmon ancilla driven by Ω(t).
-        buffer_time : int, optional
-            Extra idle time [ns] inserted around each ECD pulse (default 0).
-        """
-        self.storages = storages
-        self.storage  = storages[0]  # Active storage, updated per ECD gate in ecd_circuit.
-        self.qubit    = qubit
-        self.buffer_time = buffer_time
-
-    def _construct_cd(self, alpha=20, beta=1, tw=100, r=1, r2=1, r3=1, r4=1):
-        """Assemble the raw four-pulse ECD cavity and transmon waveforms.
-
-        Lays out the echoed conditional displacement: four cavity displacement
-        sub-pulses (amplitudes ±r_i·α along the β direction) separated by idle
-        gaps, with the transmon echo π-pulse in the middle gap. All sub-pulses
-        point along ``arg(β) + π/2`` so the conditional displacement builds along β.
-
-        Parameters
-        ----------
-        alpha : float, optional
-            Intermediate displacement magnitude (gate speed); see module notation.
-        beta : complex, optional
-            Target conditional displacement; only its phase is used here (the
-            magnitude is reached by tuning alpha/tw in :meth:`_alpha_tw_optimizer`).
-        tw : int, optional
-            Idle samples [ns] between successive displacement pulses.
-        r : float, optional
-            Overall amplitude scale applied to the whole cavity waveform.
-        r2, r3, r4 : float, optional
-            Amplitudes of the 2nd/3rd/4th displacement pulses relative to the
-            first, tuned so the deterministic displacement returns to the origin.
-
-        Returns
-        -------
-        (epsilon, omega) : tuple of numpy.ndarray
-            Cavity drive ε(t) and transmon drive Ω(t), of equal length.
-        """
-        storage_unit_displacement_complex = self.storage.pulse.disp_gaussian()
-        qubit_pi_rotation_complex = self.qubit.pulse.rotate()
-        beta_phase = np.angle(beta) + np.pi/2
-
-        storage_first_pulse = alpha * storage_unit_displacement_complex * np.exp(1j * beta_phase)
-        storage_first_wait = np.zeros(tw)
-        storage_second_pulse = - r2 * alpha * storage_unit_displacement_complex * np.exp(1j * beta_phase)
-        storage_second_wait = np.zeros(len(qubit_pi_rotation_complex) + 2 * self.buffer_time)
-        storage_third_pulse =  - r3 * alpha * storage_unit_displacement_complex * np.exp(1j * beta_phase)
-        storage_third_wait = np.zeros(tw)
-        storage_fourth_pulse = + r4 * alpha * storage_unit_displacement_complex * np.exp(1j * beta_phase)
-
-        epsilon = r * np.concatenate(
-            [
-                storage_first_pulse,
-                storage_first_wait,
-                storage_second_pulse,
-                storage_second_wait,
-                storage_third_pulse,
-                storage_third_wait,
-                storage_fourth_pulse,
-            ]
-        )
-        omega = np.concatenate(
-            [np.zeros(tw + 2 * len(storage_unit_displacement_complex) + self.buffer_time), qubit_pi_rotation_complex, np.zeros(tw + 2 * len(storage_unit_displacement_complex) + self.buffer_time)]
-        )
-        return epsilon, omega
-
-    def _ecd_trajectory(self, epsilon, omega):
-        """Classical cavity trajectories α_g(t), α_e(t) across one ECD waveform.
-
-        Integrates the mean-field motion (:mod:`metriq_qudits.physics.alpha_dynamics`)
-        in the g/e-midpoint frame (δ = χ/2), restarting at each transmon echo:
-        because the π-pulse swaps g↔e, the ground branch continues from the
-        excited branch's endpoint and vice versa. The final split |α_g − α_e| is
-        the achieved conditional displacement.
-
-        Parameters
-        ----------
-        epsilon : numpy.ndarray of complex
-            Cavity drive ε(t) for the gate.
-        omega : numpy.ndarray
-            Transmon drive Ω(t); its peaks mark the echoes where g/e swap.
-
-        Returns
-        -------
-        (alpha_g, alpha_e) : tuple of numpy.ndarray
-            Conditional cavity trajectories, same length as ``epsilon``.
-        """
-        flip_idxs = get_flip_idxs(np.abs(omega))
-        chi, chi_prime, self_kerr, kappa = storage_parameters(self.storage)
-        delta = chi / 2
-
-        f = lambda epsilon, alpha_g_init, alpha_e_init: alpha_from_epsilon_finite_difference(
-            epsilon,
-            delta=delta,
-            chi=chi,
-            chi_prime=chi_prime,
-            self_kerr=self_kerr,
-            kappa=kappa,
-            alpha_g_init=alpha_g_init,
-            alpha_e_init=alpha_e_init,
-        )
-        epsilons = np.split(epsilon, flip_idxs)
-        alpha_g = []  # alpha_g defined as the trajectory that starts in g
-        alpha_e = []
-        g_state = 0  # this bit will track if alpha_g is in g (0) or e (1)
-        alpha_g_init = 0 + 0j
-        alpha_e_init = 0 + 0j
-        for epsilon in epsilons:
-            alpha_g_current, alpha_e_current = f(epsilon, alpha_g_init, alpha_e_init)
-            if g_state == 0:
-                alpha_g.append(alpha_g_current)
-                alpha_e.append(alpha_e_current)
-            else:
-                alpha_g.append(alpha_e_current)
-                alpha_e.append(alpha_g_current)
-            # because we will flip the qubit, the initial state for the next g trajectory will be the final from e of the current trajectory.
-            alpha_g_init = alpha_e_current[-1]
-            alpha_e_init = alpha_g_current[-1]
-            g_state = 1 - g_state  # flip the bit
-        alpha_g = np.concatenate(alpha_g)
-        alpha_e = np.concatenate(alpha_e)
-
-        return alpha_g, alpha_e
-
-    """
-     Pulse ratios optimizer
-    """
-    def _initial_guess(self, alpha, beta):
-        """Analytic starting point for the wait time and pulse ratios.
-
-        Estimates the wait ``tw`` needed for the conditional phase -- rotating at
-        the effective dispersive rate χ_eff = χ + χ'|α|² -- to build the target
-        |β|, plus the ratios r2/r4 that pre-compensate the deterministic
-        displacement for that tw. These seed the numerical :meth:`_cost_optimizer`.
-
-        Parameters
-        ----------
-        alpha : float
-            Intermediate displacement magnitude.
-        beta : complex
-            Target conditional displacement.
-
-        Returns
-        -------
-        (r, r2, r3, r4, tw) : tuple
-            Initial pulse-amplitude ratios (floats) and wait time tw [ns, int].
-        """
-        chi, chi_prime, _, _ = storage_parameters(self.storage)
-
-        n = np.abs(alpha) ** 2
-        chi_effective = chi + chi_prime * n
-        tw =  int(np.abs(np.arcsin(np.abs(beta) / (2 * alpha)) / chi_effective))
-        r = 1.0
-        r2 = np.cos((chi_effective / 2.0) * tw)
-        r3 = r2
-        r4 = np.cos(chi_effective * tw)
-
-        return r, r2, r3, r4, tw
-
-    def _cost_function(self, alpha=20, beta=2, tw=100, r=1, r2=1, r3=1, r4=1, output=False):
-        """Objective for tuning the four displacement-pulse ratios.
-
-        Builds the candidate waveform, integrates its conditional trajectories,
-        and penalizes a gate that does not "close": the residual (deterministic)
-        displacement at the echo and at the end should vanish (α_g + α_e ≈ 0),
-        while each branch should trace a loop of radius |α|. The four penalties
-        are summed.
-
-        Parameters
-        ----------
-        alpha, beta, tw, r, r2, r3, r4
-            Candidate gate parameters; see :meth:`_construct_cd`.
-        output : bool, optional
-            If True, print the individual penalty terms.
-
-        Returns
-        -------
-        float
-            Total cost (0 for an ideal gate).
-        """
-        epsilon, omega = self._construct_cd(alpha, beta, tw, r, r2, r3, r4)
-
-        flip_idx = int(len(epsilon) / 2)
-
-        alpha_g, alpha_e = self._ecd_trajectory(epsilon=epsilon, omega=omega)
-        mid_disp = np.abs(alpha_g[flip_idx] + alpha_e[flip_idx])
-        final_disp = np.abs(alpha_g[-1] + alpha_e[-1])
-        first_radius = np.abs(
-            (alpha_g[int(flip_idx / 2)] + alpha_e[int(flip_idx / 2)]) / 2.0
-        )
-        second_radius = np.abs(
-            (alpha_g[int(3 * flip_idx / 2)] + alpha_e[int(3 * flip_idx / 2)]) / 2.0
+    def frame(self, mode):
+        chi, chi_prime, kerr, kappa = self._extract(mode)
+        return DispersiveRates(
+            chi=chi, chi_prime=chi_prime, kerr=kerr, kappa=kappa, delta=0.5 * chi
         )
 
-        total_cost = np.abs(mid_disp) + np.abs(final_disp) + np.abs(first_radius - np.abs(alpha)) + np.abs(second_radius - np.abs(alpha))
+    def conditional_trajectories(
+        self, cavity_drive, ancilla_drive=None, echo_samples=None, mode_index=0
+    ):
+        if echo_samples is None:
+            if ancilla_drive is None:
+                raise ValueError("need either echo_samples or ancilla_drive")
+            echo_samples = detect_echo_centers(ancilla_drive)
+        return evolve_with_echoes(
+            cavity_drive, echo_samples, self.frame(self.modes[mode_index])
+        )
 
-        if output:
-            print(
-                "\r  mid_disp: %.4f" % mid_disp
-                + " final_disp: %.4f" % final_disp
-                + " first_radius: %.4f" % first_radius
-                + " second_radius: %.4f" % second_radius
-                + " total_cost: %.4f" % total_cost
+
+    def _assemble(self, mode, recipe):
+        lobe = mode.displacement(1.0)
+        echo = self.ancilla.rotation()
+        amplitudes = [
+            sign * weight * recipe.peak * recipe.direction
+            for sign, weight in zip(LOBE_SIGNS, recipe.weights)
+        ]
+
+        cavity_blocks, ancilla_blocks = [], []
+
+        def emit(cavity=None, ancilla=None, idle=None):
+            block = cavity if cavity is not None else ancilla
+            n = idle if idle is not None else len(block)
+            cavity_blocks.append(
+                cavity if cavity is not None else np.zeros(n, dtype=complex)
             )
-        return total_cost
-
-    def _cost_optimizer(self, alpha, beta, output=True):
-        """Tune the pulse ratios (r, r2, r3, r4) by minimizing :meth:`_cost_function`.
-
-        Runs Nelder-Mead (:func:`scipy.optimize.fmin`) from the analytic
-        :meth:`_initial_guess`, at the fixed wait time from that guess.
-
-        Parameters
-        ----------
-        alpha : float
-            Intermediate displacement magnitude.
-        beta : complex
-            Target conditional displacement.
-        output : bool, optional
-            Forwarded to the cost function's per-iteration printing.
-
-        Returns
-        -------
-        (r, r2, r3, r4, tw) : tuple
-            Optimized pulse-amplitude ratios and the (fixed) wait time [ns].
-        """
-        # guess ratios:
-        initial_ratios = self._initial_guess(alpha=alpha, beta=beta)
-        r, r2, r3, r4 = initial_ratios[0], initial_ratios[1], initial_ratios[2], initial_ratios[3]
-
-        def cost(x):
-            return self._cost_function(alpha=alpha, beta=beta, tw=initial_ratios[4], r=x[0], r2=x[1], r3=x[2], r4=x[3], output=output)
-
-        result = fmin(cost, x0=[r, r2, r3, r4], ftol=1e-3, xtol=1e-3, disp=False)
-        r = result[0]
-        r2 = result[1]
-        r3 = result[2]
-        r4 = result[3]
-        tw = initial_ratios[4]
-        return r, r2, r3, r4, tw
-
-    def _integrated_beta_and_displacement(self, epsilon, omega, output=False):
-        """Achieved conditional displacement and residual displacement of a waveform.
-
-        Integrates the conditional trajectories and reads off, at the gate end,
-        the g↔e separation |α_g − α_e| (the achieved |β|) and the common-mode
-        residual |α_g + α_e| (the leftover deterministic displacement, ideally 0).
-
-        Parameters
-        ----------
-        epsilon : numpy.ndarray of complex
-            Cavity drive ε(t).
-        omega : numpy.ndarray
-            Transmon drive Ω(t) (must contain exactly one echo).
-        output : bool, optional
-            If True, print intermediate displacement diagnostics.
-
-        Returns
-        -------
-        (obtained_beta, obtained_displacement) : tuple of float
-            Achieved |β| and residual |displacement| at the gate end.
-        """
-        # note that the trajectories are first solved without kerr.
-        flip_idx = single_flip_idx(omega)
-        alpha_g, alpha_e = self._ecd_trajectory(epsilon=epsilon, omega=omega)
-        mid_disp = np.abs(alpha_g[flip_idx] + alpha_e[flip_idx])
-        final_disp = np.abs(alpha_g[-1] + alpha_e[-1])
-        first_radius = np.abs(
-            (alpha_g[int(flip_idx / 2)] + alpha_e[int(flip_idx / 2)]) / 2.0
-        )
-        second_radius = np.abs(
-            (alpha_g[int(3 * flip_idx / 2)] + alpha_e[int(3 * flip_idx / 2)]) / 2.0
-        )
-        if output:
-            print(
-                "\r  mid_disp: %.4f" % mid_disp
-                + " final_disp: %.4f" % final_disp
-                + " first_radius: %.4f" % first_radius
-                + " second_radius: %.4f" % second_radius,
-                # end="",
+            ancilla_blocks.append(
+                ancilla if ancilla is not None else np.zeros(n, dtype=complex)
             )
 
-        obtained_beta = np.abs(alpha_g[-1] - alpha_e[-1])
-        obtained_displacement = np.abs(alpha_g[-1] + alpha_e[-1])
+        emit(cavity=amplitudes[0] * lobe)
+        emit(idle=recipe.wait_ns)
+        emit(cavity=amplitudes[1] * lobe)
+        emit(idle=self.pad_ns)
+        echo_sample = sum(len(b) for b in cavity_blocks) + len(echo) // 2
+        emit(ancilla=echo)
+        emit(idle=self.pad_ns)
+        emit(cavity=amplitudes[2] * lobe)
+        emit(idle=recipe.wait_ns)
+        emit(cavity=amplitudes[3] * lobe)
 
-        return obtained_beta, obtained_displacement
+        return (
+            np.concatenate(cavity_blocks),
+            np.concatenate(ancilla_blocks),
+            echo_sample,
+        )
 
-    def _alpha_tw_optimizer(self, epsilon, omega, alpha, beta, tw, optimization_threshold=1e-3, output=False):
-        """Adjust wait time (then α) until the achieved |β| matches the target.
 
-        Outer calibration loop: measures the achieved |β|, and while it is off by
-        more than ``optimization_threshold`` (relative), shortens the wait ``tw``
-        first and then scales down ``alpha``, re-optimizing the pulse ratios and
-        rebuilding the waveform each iteration.
-
-        Parameters
-        ----------
-        epsilon, omega : numpy.ndarray
-            Initial cavity / transmon waveforms to refine.
-        alpha : float
-            Starting intermediate displacement magnitude.
-        beta : complex
-            Target conditional displacement.
-        tw : int
-            Starting wait time [ns].
-        optimization_threshold : float, optional
-            Relative |β| tolerance at which to stop (default 1e-3).
-        output : bool, optional
-            If True, print per-iteration progress.
-
-        Returns
-        -------
-        tuple
-            ``(epsilon, omega, r, r2, r3, r4, alpha, tw, achieved_beta,
-            residual_displacement)`` for the converged gate.
-        """
-        current_beta, current_disp = self._integrated_beta_and_displacement(epsilon, omega, output)
-        diff = np.abs(current_beta) - np.abs(beta)
-        ratio = np.abs(current_beta) / np.abs(beta)
-        if output:
-            print(
-                "tw: "
-                + str(tw)
-                + "alpha: "
-                + str(alpha)
-                + "beta: "
-                + str(current_beta)
-                + "diff: "
-                + str(diff)
+    def _seed_recipe(self, mode, beta, peak):
+        chi, chi_prime, _, _ = self._extract(mode)
+        chi_eff = chi + chi_prime * peak**2
+        if chi_eff == 0.0:
+            raise ValueError("cannot seed an ECD gate with zero dispersive shift")
+        fraction = abs(beta) / (2.0 * peak)
+        if fraction >= 1.0:
+            raise ValueError(
+                f"peak displacement {peak} is too small for |beta| = {abs(beta)}"
             )
-        #  could look at real/imag part...
-        # for now, will only consider absolute value
-        # first step: lower tw
-        #
-        if diff < 0:
-            tw = int(tw * 1.5)
-            ratio = 1.01
-        tw_flag = True
-        while np.abs(diff) / np.abs(beta) > optimization_threshold:
-            if ratio > 1.0 and tw > 0 and tw_flag:
-                tw = int(tw / ratio)
-            else:
-                tw_flag = False
-                # if ratio > 1.02:
-                #    ratio = 1.02
-                # if ratio < 0.98:
-                #    ratio = 0.98
-                alpha = alpha / ratio
+        wait = int(abs(np.arcsin(fraction) / chi_eff))
+        half, full = np.cos(0.5 * chi_eff * wait), np.cos(chi_eff * wait)
+        return GateRecipe(
+            peak=float(peak),
+            wait_ns=wait,
+            weights=(1.0, float(half), float(half), float(full)),
+            direction=np.exp(1j * (np.angle(beta) + 0.5 * np.pi)),
+        )
 
-            # update the ratios for the new tw and alpha given chi_prime
-            ratios = self._cost_optimizer(alpha, beta, output=output)
-            r = ratios[0]
-            r2 = ratios[1]
-            r3 = ratios[2]
-            r4 = ratios[3]
-
-            epsilon, omega = self._construct_cd(alpha, beta, tw, r, r2, r3, r4)
-
-            current_beta, current_disp = self._integrated_beta_and_displacement(epsilon, omega, output)
-            diff = np.abs(current_beta) - np.abs(beta)
-            ratio = np.abs(current_beta) / np.abs(beta)
-
-            if output:
-                print(
-                    "tw: "
-                    + str(tw)
-                    + "alpha: "
-                    + str(alpha)
-                    + "beta: "
-                    + str(current_beta)
-                    + "diff: "
-                    + str(diff)
-                )
-
-        return epsilon, omega, r, r2, r3, r4, alpha, tw, current_beta, current_disp
-
-    def _analytic_ecd_component(self, epsilon, omega):
-        """Closed-form ECD gate quantities in the weak-dispersive limit.
-
-        Exact when χ'=K=0. From the cavity drive and the echo position it builds
-        the qubit sign z(t)=±1 (flipping at each echo) and the conditional phase
-        φ(t) = -(χ/2)·∫z, then integrates the drive against φ to obtain the
-        conditional displacement β, the residual coherent displacement λ, and the
-        spurious transmon phase θ' that a virtual-Z later removes. (Here ``delta``
-        and ``gamma`` are running displacement integrals, not the Hamiltonian δ.)
-
-        Parameters
-        ----------
-        epsilon : numpy.ndarray of complex
-            Cavity drive ε(t) of the gate.
-        omega : numpy.ndarray
-            Transmon drive Ω(t) (used only to locate the single echo).
-
-        Returns
-        -------
-        dict
-            Keys: ``z`` (qubit sign ±1 vs time), ``phi`` (conditional phase φ(t)),
-            ``gamma`` / ``delta`` (running coherent / conditional displacement),
-            ``theta`` (accumulated transmon phase θ(t)), ``correction`` and
-            ``theta_prime`` (spurious qubit phase θ' for the virtual-Z),
-            ``lambda`` = λ (residual displacement) and ``beta`` = β (achieved
-            conditional displacement, = 2·delta[-1]).
-        """
-        chi, _, _, _ = storage_parameters(self.storage)
-        flip_idxs = [single_flip_idx(omega)]
-        pm = +1
-        z = []
-        for i in range(len(flip_idxs) + 1):
-            l_idx = 0 if i == 0 else flip_idxs[i - 1]
-            r_idx = len(omega) if i == len(flip_idxs) else flip_idxs[i]
-            z.append(pm * np.ones(r_idx - l_idx))
-            pm = -1 * pm
-        z = np.concatenate(z)
-        phi = -(chi / 2.0) * np.cumsum(z)
-        gamma = np.zeros_like(phi, dtype=np.complex64)
-        delta = np.zeros_like(gamma)
-        for i in range(len(phi)):
-            delta[i] = -1 * np.sum(np.sin(phi[: i + 1] - phi[i]) * epsilon[: i + 1])
-            gamma[i] = -1j * np.sum(np.cos(phi[: i + 1] - phi[i]) * epsilon[: i + 1])
-        theta = -2 * np.cumsum(np.real(np.conj(epsilon) * delta))
-        correction = 2 * np.imag(gamma[-1] * delta[-1])
-        theta_prime = theta[-1] + correction
-        lam = gamma[-1]
-        beta = 2 * delta[-1]
+    def _closure_report(self, mode, cavity_drive, ancilla_drive, echo_sample):
+        traj_g, traj_e = evolve_with_echoes(
+            cavity_drive, [echo_sample], self.frame(mode)
+        )
+        common = traj_g + traj_e
+        quarter = echo_sample // 2
+        three_quarter = echo_sample + (len(cavity_drive) - echo_sample) // 2
         return {
-            "z": z,
-            "theta": theta,
-            "gamma": gamma,
-            "delta": delta,
-            "phi": phi,
-
-            "correction": correction,
-            "theta_prime": theta_prime,
-            "lambda": lam,
-            "beta": beta
+            "mid": float(np.abs(common[echo_sample])),
+            "end": float(np.abs(common[-1])),
+            "radius_out": float(0.5 * np.abs(common[quarter])),
+            "radius_back": float(0.5 * np.abs(common[three_quarter])),
+            "beta": float(np.abs(traj_g[-1] - traj_e[-1])),
         }
 
-    def ecd_gate(
-            self,
-            beta=1,
-            alpha=10,
-            output=False
+    def _fit_weights(self, mode, recipe):
+        def objective(weights):
+            candidate = replace(recipe, weights=tuple(float(w) for w in weights))
+            drives = self._assemble(mode, candidate)
+            report = self._closure_report(mode, *drives)
+            residuals = (
+                report["mid"],
+                report["end"],
+                report["radius_out"] - recipe.peak,
+                report["radius_back"] - recipe.peak,
+            )
+            return float(sum(r * r for r in residuals))
+
+        result = minimize(
+            objective,
+            x0=np.asarray(recipe.weights, dtype=float),
+            method="Powell",
+            options={"xtol": 1e-3, "ftol": 1e-3, "maxfev": 4000},
+        )
+        return replace(recipe, weights=tuple(float(w) for w in result.x))
+
+    def compile_gate(self, beta, peak_amplitude=10.0, mode_index=0, verbose=False):
+        mode = self.modes[mode_index]
+        beta = complex(beta)
+        recipe = self._seed_recipe(mode, beta, abs(float(peak_amplitude)))
+        target = abs(beta)
+
+        tuning_wait = True
+        previous_wait = None
+        for step in range(self.max_calibration_rounds):
+            recipe = self._fit_weights(mode, recipe)
+            cavity, ancilla, echo_sample = self._assemble(mode, recipe)
+            report = self._closure_report(mode, cavity, ancilla, echo_sample)
+            achieved = report["beta"]
+            if verbose:
+                print(
+                    f"round {step}: wait={recipe.wait_ns} peak={recipe.peak:.4f} "
+                    f"|beta|={achieved:.5f} (target {target:.5f}) "
+                    f"closure end={report['end']:.4f}"
+                )
+            if abs(achieved - target) <= self.beta_tolerance * target:
+                return GateWaveforms(
+                    cavity_drive=cavity,
+                    ancilla_drive=ancilla,
+                    echo_sample=echo_sample,
+                    peak_displacement=recipe.peak,
+                    wait_time_ns=recipe.wait_ns,
+                    achieved_beta=achieved,
+                    residual_displacement=report["end"],
+                )
+
+            rescale = target / achieved
+            if tuning_wait and recipe.wait_ns > 0:
+                proposal = max(0, int(np.rint(recipe.wait_ns * rescale)))
+                if proposal not in (recipe.wait_ns, previous_wait):
+                    previous_wait = recipe.wait_ns
+                    recipe = replace(recipe, wait_ns=proposal)
+                    continue
+                tuning_wait = False
+            recipe = replace(recipe, peak=recipe.peak * rescale)
+
+        raise RuntimeError(
+            f"ECD calibration did not converge to |beta| = {target} within "
+            f"{self.max_calibration_rounds} rounds"
+        )
+
+
+    def weak_dispersive_summary(
+        self, cavity_drive, ancilla_drive=None, echo_samples=None, mode_index=0
     ):
-        """Build the physical waveforms for one ECD gate of amplitude β.
+        if echo_samples is None:
+            if ancilla_drive is None:
+                raise ValueError("need either echo_samples or ancilla_drive")
+            echo_samples = detect_echo_centers(ancilla_drive)
+        chi = self._extract(self.modes[mode_index])[0]
 
-        Seeds the pulse ratios (:meth:`_cost_optimizer`), builds the initial
-        four-pulse waveform, then calibrates the wait time and α
-        (:meth:`_alpha_tw_optimizer`) so the achieved conditional displacement
-        matches |β|.
+        eps = np.asarray(cavity_drive, dtype=complex)
+        sign = np.ones(len(eps))
+        for idx in sorted(int(i) for i in echo_samples):
+            sign[idx:] *= -1.0
+        phi = -0.5 * chi * np.cumsum(sign)
 
-        Parameters
-        ----------
-        beta : complex, optional
-            Target conditional displacement (the ECD amplitude).
-        alpha : float, optional
-            Starting intermediate displacement magnitude (gate speed).
-        output : bool, optional
-            If True, print optimizer progress.
+        rotor = np.exp(1j * phi)
+        forward = np.cumsum(rotor * eps)
+        backward = np.cumsum(eps / rotor)
+        delta = 0.5j * (forward / rotor - backward * rotor)
+        gamma = -0.5j * (forward / rotor + backward * rotor)
 
-        Returns
-        -------
-        ECDPulse
-            The cavity / ancilla waveforms and the achieved β, α, wait time, and
-            residual displacement.
-        """
-        beta = float(beta) if isinstance(beta, int) else beta
-        alpha = float(alpha) if isinstance(alpha, int) else alpha
-        alpha = np.abs(alpha)
-        # initial ratios of the displacements
-        initial_ratios = self._cost_optimizer(alpha=alpha, beta=beta, output=output)
-        r, r2, r3, r4, tw = initial_ratios[0], initial_ratios[1], initial_ratios[2], initial_ratios[3], initial_ratios[4]
-
-        initial_epsilon, initial_omega = self._construct_cd(alpha=alpha, beta=beta, tw=tw, r=r, r2=r2, r3=r3, r4=r4)
-
-        (final_epsilon, final_omega, _, _, _, _, final_alpha, final_tw,
-         final_beta, final_displacement) = self._alpha_tw_optimizer(
-            initial_epsilon, initial_omega, alpha, beta, tw, output=output,
+        theta = -2.0 * np.cumsum(np.real(np.conj(eps) * delta))
+        cross_term = 2.0 * float(np.imag(gamma[-1] * delta[-1]))
+        return WeakDispersiveSummary(
+            qubit_sign=sign,
+            conditional_phase=phi,
+            running_displacement=gamma,
+            running_conditional=delta,
+            qubit_phase=theta,
+            theta_prime=float(theta[-1]) + cross_term,
+            residual_displacement=complex(gamma[-1]),
+            beta=complex(2.0 * delta[-1]),
         )
 
-        return ECDPulse(
-            cavity_drive=final_epsilon,
-            ancilla_drive=final_omega,
-            peak_displacement=final_alpha,
-            wait_time_ns=final_tw,
-            achieved_beta=final_beta,
-            residual_displacement=final_displacement,
-        )
+    def _spurious_cavity_phase(self, mode, traj_g, traj_e):
+        _, chi_prime, kerr, _ = self._extract(mode)
+        photons = 0.5 * (np.abs(traj_g) ** 2 + np.abs(traj_e) ** 2)
+        return float((2.0 * kerr + chi_prime) * np.sum(photons))
 
-    def _spurious_cavity_phase(self, j, alpha_g, alpha_e):
-        """Spurious cavity phase accumulated on mode j during one ECD gate.
 
-        A residual per-gate rotation of the cavity from two sources
-        (You et al. 2024, Sec. II):
-          - Self-Kerr:             phi_SK = 2 K_j ∫ |α_j|² dt           (Eq. 3)
-          - 2nd-order dispersive:  phi_2D = χ'_j ∫ |α_j|² dt            (Eq. 5)
-
-        Parameters
-        ----------
-        j : int
-            Cavity-mode index (selects ``self.storages[j]``).
-        alpha_g, alpha_e : numpy.ndarray of complex
-            Conditional trajectories for the gate; the phase uses their mean
-            photon number ½(|α_g|² + |α_e|²).
-
-        Returns
-        -------
-        float
-            Total spurious phase φ_SK + φ_2D [rad], undone as a virtual cavity
-            rotation.
-        """
-        alpha_sq = 0.5 * (np.abs(alpha_g) ** 2 + np.abs(alpha_e) ** 2)
-        integral = float(np.sum(alpha_sq))  # dt = 1 ns
-
-        _, chi_prime, self_kerr, _ = storage_parameters(self.storages[j])
-        return 2.0 * self_kerr * integral + chi_prime * integral
-
-    def ecd_circuit(
+    def compile_circuit(
         self,
         betas,
         rotations,
-        alpha_CD=10,
-        output=False,
+        peak_amplitude=10.0,
+        verbose=False,
         correct_cavity_phases=False,
     ):
-        """Build the cavity and transmon waveforms for a full ECD + rotation circuit.
+        betas = np.atleast_2d(np.asarray(betas))
+        rotations = np.asarray(rotations, dtype=float)
+        layers, num_modes = betas.shape
+        if num_modes != len(self.modes):
+            raise ValueError(
+                f"betas addresses {num_modes} modes but the compiler has "
+                f"{len(self.modes)}"
+            )
+        expected = (layers * num_modes + 1, 2)
+        if rotations.shape != expected:
+            raise ValueError(
+                f"expected rotations of shape {expected}, got {rotations.shape}"
+            )
 
-        Interleaves, per layer, a transmon rotation R(θ, φ) with an ECD gate on
-        each mode (:meth:`ecd_gate`), tracking the virtual-Z transmon phase
-        between gates and, optionally, correcting the spurious cavity phase.
+        cavity_tracks = [[] for _ in range(num_modes)]
+        ancilla_track = []
 
-        Parameters
-        ----------
-        betas : array_like, shape (k, num_modes)
-            Complex ECD amplitude β for each of the k layers and each mode.
-        rotations : array_like, shape (k*num_modes + 1, 2)
-            ``[theta, phi]`` for each transmon rotation segment (one before every
-            ECD plus a final rotation), angles in radians.
-        alpha_CD : float, optional
-            Intermediate displacement magnitude passed to each ECD gate.
-        output : bool, optional
-            If True, print per-gate optimizer progress.
-        correct_cavity_phases : bool, optional
-            If True, undo the spurious self-Kerr / second-order-dispersive cavity
-            phase after each ECD gate (You et al. 2024, Sec. II). Default False.
-
-        Returns
-        -------
-        CircuitPulse
-            Synchronized cavity / ancilla waveforms plus per-gate diagnostics.
-        """
-        betas     = np.asarray(betas)
-        rotations = np.asarray(rotations)
-        k, num_modes = betas.shape
-        assert num_modes == len(self.storages), (
-            f"betas has {num_modes} modes but builder has {len(self.storages)} storages"
-        )
-        assert rotations.shape == (k * num_modes + 1, 2), (
-            f"Expected rotations shape ({k * num_modes + 1}, 2), got {rotations.shape}"
-        )
-
-        epsilons               = [[] for _ in range(num_modes)]
-        omega_segs             = []
-        alphas                 = []
-        tws                    = []
-        cd_qubit_phases        = []
-        achieved_betas         = []
-        cumulative_qubit_phase = 0.0
-        last_beta_per_mode     = [None] * num_modes
-        last_ecd_per_mode      = [None] * num_modes  # (ECDPulse, optional (alpha_g, alpha_e))
-        rot_idx                = 0
-
-        # Cavity phase correction state (only used when correct_cavity_phases=True)
-        cumulative_cavity_phase  = np.zeros(num_modes)
-        for layer in range(k):
-            for j in range(num_modes):
-                self.storage = self.storages[j]
-
-                theta = float(rotations[rot_idx, 0])
-                phi   = float(rotations[rot_idx, 1])
-                rot_idx += 1
-                o_r = self.qubit.pulse.rotate(theta=theta, phi=phi)
-                omega_segs.append(np.exp(1j * cumulative_qubit_phase) * o_r)
-                for m in range(num_modes):
-                    epsilons[m].append(np.zeros(len(o_r)))
-
-                beta = betas[layer, j]
-                if np.abs(beta) > 1e-3:
-                    if correct_cavity_phases:
-                        phase_corr = cumulative_cavity_phase[j]
-                        beta = beta * np.exp(1j * phase_corr)
-
-                    if beta == last_beta_per_mode[j]:
-                        cached = last_ecd_per_mode[j]
-                        gate = cached[0]
-                        if correct_cavity_phases:
-                            trajectory = cached[1]
-                    else:
-                        gate = self.ecd_gate(
-                            beta=beta, alpha=alpha_CD, output=output,
-                        )
-                        if correct_cavity_phases:
-                            alpha_g, alpha_e = self._ecd_trajectory(
-                                gate.cavity_drive, gate.ancilla_drive,
-                            )
-                            trajectory = (alpha_g, alpha_e)
-                            last_ecd_per_mode[j] = (gate, trajectory)
-                        else:
-                            last_ecd_per_mode[j] = (gate,)
-                        last_beta_per_mode[j] = beta
-
-                    e_cd = gate.cavity_drive
-                    o_cd = gate.ancilla_drive
-                    alphas.append(gate.peak_displacement)
-                    tws.append(gate.wait_time_ns)
-                    analytic_dict = self._analytic_ecd_component(e_cd, o_cd)
-
-                    if correct_cavity_phases:
-                        cumulative_cavity_phase[j] += self._spurious_cavity_phase(
-                            j, trajectory[0], trajectory[1],
-                        )
+        def emit(ancilla_block, active_mode=None, cavity_block=None):
+            n = len(ancilla_block)
+            ancilla_track.append(np.asarray(ancilla_block, dtype=complex))
+            for m in range(num_modes):
+                if active_mode is not None and m == active_mode:
+                    cavity_tracks[m].append(np.asarray(cavity_block, dtype=complex))
                 else:
-                    e_cd, o_cd = np.array([]), np.array([])
-                    analytic_dict = {"theta_prime": 0.0, "beta": 0.0}
+                    cavity_tracks[m].append(np.zeros(n, dtype=complex))
 
-                cd_qubit_phases.append(analytic_dict["theta_prime"])
-                achieved_betas.append(analytic_dict["beta"])
+        peaks, waits, gate_phases, achieved = [], [], [], []
+        transmon_phase = 0.0
+        cavity_phase = np.zeros(num_modes)
+        cache = [None] * num_modes
 
-                omega_segs.append(np.exp(1j * cumulative_qubit_phase) * o_cd)
-                for m in range(num_modes):
-                    epsilons[m].append(e_cd if m == j else np.zeros(len(e_cd)))
+        rotation_rows = iter(rotations)
+        for _layer in range(layers):
+            for j in range(num_modes):
+                theta, phi = next(rotation_rows)
+                segment = self.ancilla.rotation(angle=theta, axis_phase=phi)
+                emit(np.exp(1j * transmon_phase) * segment)
 
-                cumulative_qubit_phase += cd_qubit_phases[-1]
+                beta = complex(betas[_layer, j])
+                if abs(beta) <= 1e-3:
+                    gate_phases.append(0.0)
+                    achieved.append(0.0)
+                    continue
+                if correct_cavity_phases:
+                    beta = beta * np.exp(1j * cavity_phase[j])
 
-        theta = float(rotations[rot_idx, 0])
-        phi   = float(rotations[rot_idx, 1])
-        o_r   = self.qubit.pulse.rotate(theta=theta, phi=phi)
-        omega_segs.append(np.exp(1j * cumulative_qubit_phase) * o_r)
-        for m in range(num_modes):
-            epsilons[m].append(np.zeros(len(o_r)))
+                cached = cache[j]
+                if cached is not None and cached[0] == beta:
+                    _, gate, trajectories = cached
+                else:
+                    gate = self.compile_gate(
+                        beta,
+                        peak_amplitude=peak_amplitude,
+                        mode_index=j,
+                        verbose=verbose,
+                    )
+                    trajectories = None
+                    if correct_cavity_phases:
+                        trajectories = self.conditional_trajectories(
+                            gate.cavity_drive,
+                            echo_samples=[gate.echo_sample],
+                            mode_index=j,
+                        )
+                    cache[j] = (beta, gate, trajectories)
 
-        def _concat(segs):
-            nonempty = [s for s in segs if len(s) > 0]
-            return np.concatenate(nonempty) if nonempty else np.array([])
+                peaks.append(gate.peak_displacement)
+                waits.append(gate.wait_time_ns)
+                summary = self.weak_dispersive_summary(
+                    gate.cavity_drive,
+                    echo_samples=[gate.echo_sample],
+                    mode_index=j,
+                )
+                gate_phases.append(summary.theta_prime)
+                achieved.append(summary.beta)
 
-        epsilons = [_concat(eps_segs) for eps_segs in epsilons]
-        omega    = _concat(omega_segs)
+                emit(
+                    np.exp(1j * transmon_phase) * gate.ancilla_drive,
+                    active_mode=j,
+                    cavity_block=gate.cavity_drive,
+                )
+                transmon_phase += summary.theta_prime
+                if correct_cavity_phases:
+                    cavity_phase[j] += self._spurious_cavity_phase(
+                        self.modes[j], *trajectories
+                    )
 
-        return CircuitPulse(
-            cavity_drives=tuple(epsilons),
-            ancilla_drive=omega,
-            peak_displacements=tuple(alphas),
-            wait_times_ns=tuple(tws),
-            ancilla_phases=tuple(cd_qubit_phases),
-            achieved_betas=tuple(achieved_betas),
-            # Spurious rotation e^{+iφn}. The simulator applies e^{-iφn}.
-            final_cavity_phases=cumulative_cavity_phase.copy(),
+        theta, phi = next(rotation_rows)
+        segment = self.ancilla.rotation(angle=theta, axis_phase=phi)
+        emit(np.exp(1j * transmon_phase) * segment)
+
+        return CircuitWaveforms(
+            cavity_drives=tuple(np.concatenate(track) for track in cavity_tracks),
+            ancilla_drive=np.concatenate(ancilla_track),
+            peak_displacements=tuple(peaks),
+            wait_times_ns=tuple(waits),
+            ancilla_phases=tuple(gate_phases),
+            achieved_betas=tuple(achieved),
+            final_cavity_phases=cavity_phase.copy(),
         )
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    from metriq_qudits.plot_utils import plot_pulse, plot_trajectory_complex
-
-    storage = Storage()
-    qubit = Qubit(sigma_ns=10, chop=4)
-    builder = ECDPulseBuilder([storage], qubit)
-
-    betas     = np.array([[1.0], [1.5]])   
-    rotations = np.array([
-        [np.pi / 2, 0.0],
-        [np.pi / 2, np.pi / 2],
-        [0.0,       0.0],
-    ])
-
-    result = builder.ecd_circuit(
-        betas=betas,
-        rotations=rotations,
-        alpha_CD=20,
-        output=True,
+    compiler = ECDPulseBuilder(
+        modes=[CavityMode()], ancilla=TransmonAncilla(sigma_ns=10)
     )
-
-    epsilon = result.cavity_drives[0]
-    omega   = result.ancilla_drive
-
-    print(f"Pulse length: {len(epsilon)} ns")
-    print(f"Spurious phases (rad): {result.ancilla_phases}")
-    print(f"Achieved betas: {result.achieved_betas}")
-
-    plot_pulse(epsilon, omega)
-    plt.suptitle("ECD circuit pulses")
-    plt.tight_layout()
-    plt.show()
-
-    alpha_g, alpha_e = builder._ecd_trajectory(epsilon, omega)
-    fig, ax = plt.subplots(figsize=(5, 5))
-    plot_trajectory_complex(alpha_g, alpha_e, ax=ax)
-    plt.tight_layout()
-    plt.show()
+    circuit = compiler.compile_circuit(
+        betas=np.array([[1.0], [1.5]]),
+        rotations=np.array(
+            [[np.pi / 2, 0.0], [np.pi / 2, np.pi / 2], [0.0, 0.0]]
+        ),
+        peak_amplitude=20.0,
+        verbose=True,
+    )
+    print(f"pulse length: {len(circuit.cavity_drives[0])} ns")
+    print(f"virtual-Z phases (rad): {circuit.ancilla_phases}")
+    print(f"achieved betas: {circuit.achieved_betas}")

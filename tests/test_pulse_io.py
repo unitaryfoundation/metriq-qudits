@@ -4,14 +4,14 @@ import numpy as np
 import pytest
 
 from metriq_qudits.pulses.pulse_io import load_pulses, save_pulses
-from metriq_qudits.pulses.pulse_models import CircuitPulse
+from metriq_qudits.pulses.ecd_pulse_builder import CircuitWaveforms
 
 
 def _pulse(length, phase, peaks):
     rng = np.random.default_rng(length)
     cav = rng.normal(size=length) + 1j * rng.normal(size=length)
     anc = rng.normal(size=length) + 1j * rng.normal(size=length)
-    return CircuitPulse(
+    return CircuitWaveforms(
         cavity_drives=(cav,),
         ancilla_drive=anc,
         final_cavity_phases=np.array([phase]),

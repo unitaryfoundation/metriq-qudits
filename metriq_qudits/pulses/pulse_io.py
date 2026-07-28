@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from metriq_qudits.pulses.pulse_models import CircuitPulse
+from metriq_qudits.pulses.ecd_pulse_builder import CircuitWaveforms
 
 
-def save_pulses(path: str, pulses: list[CircuitPulse], metadata: dict) -> None:
+def save_pulses(path: str, pulses: list[CircuitWaveforms], metadata: dict) -> None:
     """Write variable-length circuit-pulse waveforms as an NPZ cache."""
     count = len(pulses)
     num_modes = pulses[0].num_modes if pulses else int(metadata["num_modes"])
@@ -37,7 +37,7 @@ def save_pulses(path: str, pulses: list[CircuitPulse], metadata: dict) -> None:
     )
 
 
-def load_pulses(path: str) -> tuple[list[CircuitPulse], dict]:
+def load_pulses(path: str) -> tuple[list[CircuitWaveforms], dict]:
     """Load pulse caches into ordinary circuit-pulse lists."""
     data = np.load(path, allow_pickle=True)
     count = int(data["N_unitaries"])
@@ -51,7 +51,7 @@ def load_pulses(path: str) -> tuple[list[CircuitPulse], dict]:
     ancilla_drives = [data["ancilla_drive"][i] for i in range(count)]
 
     pulses = [
-        CircuitPulse(
+        CircuitWaveforms(
             cavity_drives=cavity_drives[i],
             ancilla_drive=ancilla_drives[i],
             final_cavity_phases=np.asarray(phases[i]),
