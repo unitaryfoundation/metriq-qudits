@@ -7,6 +7,8 @@ name = "metriq-qudits"
 version = "0.1.0"
 description = "Single-qudit quantum-volume compilation and simulation tools"
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "dynamiqs==0.3.4",

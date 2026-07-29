@@ -140,7 +140,7 @@ optimizer (L-BFGS by default).
   - The theory for the displaced-frame Hamiltonian (Eqs. B3–B5) and its Lindblad
     dissipators (Eq. B6), the classical trajectory α(t) (Eq. B3), and the
     spurious cavity phase corrections applied after each ECD gate (Sec. II,
-    Eqs. 3 and 5). These are implemented across `simulation/`, `physics/`, and
+    Eqs. 3 and 5). These are implemented across `simulation/` and
     `pulses/ecd_pulse_builder.py`.
 - [Metriq: A Collaborative Platform for Benchmarking Quantum Computers](https://arxiv.org/abs/2603.08680)
   - An open-source platform that integrates three components into a unified
@@ -153,3 +153,7 @@ optimizer (L-BFGS by default).
     for exploration and cross-platform comparison. We plan to
     publish benchmark results from this qudit codebase on the same website,
     enabling comparisons between qubit and qudit systems.
+
+## License
+
+metriq-qudits is available under the [Apache License 2.0](https://github.com/unitaryfoundation/metriq-qudits/blob/main/LICENSE).
