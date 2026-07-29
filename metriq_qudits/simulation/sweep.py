@@ -8,15 +8,15 @@ from pathlib import Path
 
 import numpy as np
 
-from metriq_qudits.benchmark.circuit_io import load_circuits
-from metriq_qudits.benchmark.metrics import eval_circuit
+from metriq_qudits.compilation.circuit_io import load_circuits
+from metriq_qudits.metrics import eval_circuit
 from metriq_qudits.parallel import parallel_map_unordered
 from metriq_qudits.paths import data_dir
-from metriq_qudits.pulses.pulse_stage import (
+from metriq_qudits.pulses.build import (
     CHI_PRIME_RAD_S,
     CHI_RAD_S,
     SELF_KERR_RAD_S,
-    make_storages,
+    make_modes,
     physics_metadata,
     physics_metadata_matches,
     variant_suffix,
@@ -42,16 +42,16 @@ def results_path(
 
 def _make_simulator(backend, n_cavity):
     if backend == "dynamiqs":
-        from metriq_qudits.simulation.displaced_frame_simulator_dq import DisplacedFrameSimulatorDQ
+        from metriq_qudits.simulation.displaced_frame_dynamiqs import DisplacedFrameSimulatorDQ
 
         simulator_class = DisplacedFrameSimulatorDQ
     else:
-        from metriq_qudits.simulation.displaced_frame_simulator import DisplacedFrameSimulator
+        from metriq_qudits.simulation.displaced_frame import DisplacedFrameSimulator
 
         simulator_class = DisplacedFrameSimulator
     return simulator_class(
         cavity_dim=n_cavity,
-        storage=make_storages(1)[0],
+        mode=make_modes(1)[0],
     )
 
 
@@ -134,7 +134,7 @@ def run_noiseless(
     t1_values = T1_VALUES if t1_values is None else t1_values
     t2_values = T2_VALUES if t2_values is None else t2_values
     if diagnostics_dir is not None:
-        from metriq_qudits.plot_utils import save_state_diagnostics
+        from metriq_qudits.plotting.utils import save_state_diagnostics
 
     config, n_cavity, circuits, pulses, _ = _load_inputs(
         pulse_path, compiled_path,

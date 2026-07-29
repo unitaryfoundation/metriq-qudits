@@ -1,4 +1,4 @@
-"""Compatibility wrapper for :mod:`metriq_qudits.plot_results`."""
+"""Compatibility wrapper for :mod:`metriq_qudits.plotting.results`."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from metriq_qudits.plot_results import main
+from metriq_qudits.plotting.results import main
 
 __all__ = ["main"]
 

@@ -1,4 +1,4 @@
-"""Unit tests for metriq_qudits.benchmark.gates (ideal-gate operator primitives)."""
+"""Unit tests for metriq_qudits.compilation.gates (ideal-gate operator primitives)."""
 
 import math
 
@@ -8,7 +8,7 @@ jax.config.update("jax_enable_x64", True)
 
 import numpy as np
 
-from metriq_qudits.benchmark.gates import (
+from metriq_qudits.compilation.gates import (
     _displacement,
     _ecd,
     _embed_cavity,

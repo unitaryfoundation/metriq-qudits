@@ -1,9 +1,9 @@
-"""Unit tests for metriq_qudits.benchmark.metrics."""
+"""Unit tests for metriq_qudits.metrics."""
 
 import numpy as np
 import pytest
 
-from metriq_qudits.benchmark.metrics import (
+from metriq_qudits.metrics import (
     compute_hog,
     compute_xeb,
     computational_indices,

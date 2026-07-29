@@ -174,7 +174,7 @@ def test_main_output_dir_is_applied(monkeypatch, recorded_runs, tmp_path):
 @pytest.fixture
 def recorded_plots(monkeypatch):
     """Replace plot_results.main with a recorder counting invocations."""
-    import metriq_qudits.plot_results as plot_results
+    import metriq_qudits.plotting.results as plot_results
 
     calls = []
     monkeypatch.setattr(plot_results, "main", lambda: calls.append(True))

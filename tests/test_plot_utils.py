@@ -1,4 +1,4 @@
-"""Smoke tests for the cache-driven result plots in metriq_qudits.plot_utils.
+"""Smoke tests for the cache-driven result plots in metriq_qudits.plotting.utils.
 
 These check that each plot consumes the cached NPZ layout and writes a
 non-empty figure; they do not assert on pixel content.
@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 
 import numpy as np
 
-from metriq_qudits.plot_utils import (
+from metriq_qudits.plotting.utils import (
     plot_compile_summary,
     plot_min_depth_curve,
     plot_stability_calibration,

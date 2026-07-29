@@ -1,9 +1,9 @@
-"""Unit tests for metriq_qudits.benchmark.circuit_io."""
+"""Unit tests for metriq_qudits.compilation.circuit_io."""
 
 import numpy as np
 import pytest
 
-from metriq_qudits.benchmark.circuit_io import (
+from metriq_qudits.compilation.circuit_io import (
     CompiledCircuit,
     load_circuits,
     save_circuits,

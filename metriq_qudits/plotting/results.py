@@ -9,7 +9,7 @@ import matplotlib
 matplotlib.use("Agg")
 import numpy as np
 
-from metriq_qudits.plot_utils import (
+from metriq_qudits.plotting.utils import (
     METRICS,
     plot_compile_summary,
     plot_metrics_vs_dim,

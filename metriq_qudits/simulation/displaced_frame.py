@@ -10,13 +10,8 @@ import numpy as np
 import qutip as qt
 from scipy.interpolate import CubicSpline
 
-from metriq_qudits.pulses.pulse_primitives import Storage
-from metriq_qudits.physics.alpha_dynamics import alpha_from_epsilon_finite_difference
-from metriq_qudits.physics.displaced_frame_model import (
-    ancilla_drive_coefficients, mode_conditional_coefficients,
-    mode_diagonal_coefficients, mode_static_coefficients, storage_parameters,
-)
-from metriq_qudits.physics.units import angular_frequency_from_mhz
+from metriq_qudits.pulses.drive_envelopes import CavityMode
+from metriq_qudits.pulses.conditional_dynamics import DispersiveRates, evolve_pair
 
 K_Q_DEFAULT_MHZ = -200.0  # transmon anharmonicity K_q/2π [MHz]
 
@@ -32,13 +27,13 @@ class DisplacedFrameSimulator:
     def __init__(
         self,
         cavity_dim: int,
-        storage: Storage,
+        mode: CavityMode,
         qubit_dim: int = 3,
         K_q_MHz: float = K_Q_DEFAULT_MHZ,
     ):
         self.cavity_dim = cavity_dim
         self.qubit_dim = qubit_dim
-        self.storage = storage
+        self.mode = mode
         self.dims = [cavity_dim, qubit_dim]
 
         self.a      = embed(qt.destroy(cavity_dim), 0, self.dims)
@@ -48,20 +43,22 @@ class DisplacedFrameSimulator:
         self.sigy   = 1j * (self.q_op.dag() - self.q_op)
 
         self.I_op = qt.tensor([qt.qeye(d) for d in self.dims])
-        self.K_q  = angular_frequency_from_mhz(K_q_MHz)
+        self.K_q  = 2.0 * np.pi * K_q_MHz * 1e-3  # MHz -> rad/ns
 
     def _solve_alpha(self, epsilon: np.ndarray) -> np.ndarray:
-        chi, _, self_kerr, kappa = storage_parameters(self.storage)
-        alpha, _ = alpha_from_epsilon_finite_difference(
-            np.asarray(epsilon, dtype=complex), delta=chi / 2,
-            self_kerr=self_kerr, kappa=kappa)
+        chi, _, self_kerr, kappa = self.mode.angular_rates()
+        rates = DispersiveRates(delta=chi / 2, kerr=self_kerr, kappa=kappa)
+        alpha, _ = evolve_pair(np.asarray(epsilon, dtype=complex), rates)
         return alpha
 
     def _static_hamiltonian(self) -> qt.Qobj:
         a = self.a
         n = a.dag() * a
         quartic = a.dag() * a.dag() * a * a
-        c_n, c_nnq, c_qnq, c_q = mode_static_coefficients(self.storage)
+        # static residual coupling in the g/e-midpoint frame:
+        # (chi/2) n - chi n*nq - (chi'/2) a†²a²*nq - (K/2) a†²a²
+        chi, chi_prime, self_kerr, _ = self.mode.angular_rates()
+        c_n, c_nnq, c_qnq, c_q = chi / 2.0, -chi, -chi_prime / 2.0, -self_kerr / 2.0
         H = c_n * n + c_nnq * n * self.n_q
         H += c_qnq * quartic * self.n_q + c_q * quartic
         H += self.K_q / 2.0 * self.n_q * (self.n_q - self.I_op)
@@ -78,7 +75,12 @@ class DisplacedFrameSimulator:
 
         a = self.a
         n = a.dag() * a
-        c_n, c_nnq, c_nq = mode_diagonal_coefficients(alpha, self.storage)
+        # frequency shifts induced by the classical displacement alpha(t)
+        chi, chi_prime, self_kerr, _ = self.mode.angular_rates()
+        abs2 = np.abs(alpha) ** 2
+        c_n   = -2.0 * self_kerr * abs2
+        c_nnq = -2.0 * chi_prime * abs2
+        c_nq  = -chi * abs2 - (chi_prime / 2.0) * abs2 ** 2
         return [
             [n,            sp(c_n)],
             [n * self.n_q, sp(c_nnq)],
@@ -90,8 +92,10 @@ class DisplacedFrameSimulator:
         sp = lambda arr: self._spline(tlist, arr)
 
         a = self.a
-        c_x, c_y = mode_conditional_coefficients(alpha, self.storage)
-        drive_i, drive_q = ancilla_drive_coefficients(omega)
+        # qubit-conditioned cavity displacement (the ECD term): -chi * alpha
+        chi = self.mode.angular_rates()[0]
+        c_x, c_y = -chi * np.real(alpha), -chi * np.imag(alpha)
+        drive_i, drive_q = np.real(omega), np.imag(omega)
         return [
             [self.n_q * (a + a.dag()),        sp(c_x)],
             [self.n_q * (1j * (a.dag() - a)), sp(c_y)],
@@ -102,7 +106,7 @@ class DisplacedFrameSimulator:
     def _make_c_ops(self, T1_us=None, T2_us=None) -> list:
         # Eq. B6: γ1 D[q̂] + 2γφ D[n̂_q] + κ D[â]
         c_ops = []
-        _, _, _, kappa = storage_parameters(self.storage)
+        _, _, _, kappa = self.mode.angular_rates()
         if kappa > 0:
             c_ops.append(np.sqrt(kappa) * self.a)
         if T1_us is not None:

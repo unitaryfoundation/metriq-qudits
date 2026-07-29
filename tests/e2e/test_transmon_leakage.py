@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
-from metriq_qudits.pulses.pulse_stage import make_qubit, make_storages
-from metriq_qudits.simulation.displaced_frame_simulator_dq import DisplacedFrameSimulatorDQ
+from metriq_qudits.pulses.build import make_ancilla, make_modes
+from metriq_qudits.simulation.displaced_frame_dynamiqs import DisplacedFrameSimulatorDQ
 
 pytestmark = pytest.mark.slow
 
@@ -20,18 +20,18 @@ def _random_pulse(seed=0):
     rotations = np.column_stack([
         rng.uniform(0, np.pi, DEPTH + 1), rng.uniform(0, 2 * np.pi, DEPTH + 1),
     ])
-    storage = make_storages(1)[0]
-    pulse = ECDPulseBuilder([storage], make_qubit()).ecd_circuit(
-        betas=betas, rotations=rotations, alpha_CD=10, correct_cavity_phases=True,
+    mode = make_modes(1)[0]
+    pulse = ECDPulseBuilder([mode], make_ancilla()).compile_circuit(
+        betas=betas, rotations=rotations, peak_amplitude=10, correct_cavity_phases=True,
     )
-    return storage, pulse
+    return mode, pulse
 
 
 def test_leakage_falls_with_anharmonicity():
-    storage, pulse = _random_pulse()
+    mode, pulse = _random_pulse()
     leakages, states = [], []
     for kq in KQ_MHZ:
-        sim = DisplacedFrameSimulatorDQ(cavity_dim=N_CAV, storage=storage, K_q_MHz=kq)
+        sim = DisplacedFrameSimulatorDQ(cavity_dim=N_CAV, mode=mode, K_q_MHz=kq)
         result, alpha = sim.simulate(
             epsilon=pulse.cavity_drives[0], omega=pulse.ancilla_drive,
             T1_us=None, T2_us=None,

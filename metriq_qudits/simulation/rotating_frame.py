@@ -17,13 +17,7 @@ import numpy as np
 import qutip as qt
 from scipy.interpolate import CubicSpline
 
-from metriq_qudits.pulses.pulse_primitives import Storage
-from metriq_qudits.physics.rotating_frame_model import (
-    ancilla_drive_coefficients,
-    cavity_drive_coefficients,
-    static_coefficients,
-    storage_parameters,
-)
+from metriq_qudits.pulses.drive_envelopes import CavityMode
 
 K_Q_DEFAULT_MHZ = -200.0  # transmon anharmonicity K_q/2π [MHz]
 
@@ -34,22 +28,18 @@ def embed(op: qt.Qobj, idx: int, dims: list[int]) -> qt.Qobj:
     return qt.tensor(parts)
 
 
-def _angular_frequency_from_mhz(value_mhz: float) -> float:
-    return 2.0 * np.pi * value_mhz * 1e-3
-
-
 class RotatingFrameSimulator:
 
     def __init__(
         self,
         cavity_dim: int,
-        storage: Storage,
+        mode: CavityMode,
         qubit_dim: int = 3,
         K_q_MHz: float = K_Q_DEFAULT_MHZ,
     ):
         self.cavity_dim = cavity_dim
         self.qubit_dim = qubit_dim
-        self.storage = storage
+        self.mode = mode
         self.dims = [cavity_dim, qubit_dim]
 
         a = embed(qt.destroy(cavity_dim), 0, self.dims)
@@ -65,10 +55,13 @@ class RotatingFrameSimulator:
         self.y_c = 1j * (a.dag() - a)
 
         self.I_op = qt.tensor([qt.qeye(d) for d in self.dims])
-        self.K_q = _angular_frequency_from_mhz(K_q_MHz)
+        self.K_q = 2.0 * np.pi * K_q_MHz * 1e-3  # MHz -> rad/ns
 
     def _static_hamiltonian(self) -> qt.Qobj:
-        c_n, c_nnq, c_qnq, c_q = static_coefficients(self.storage)
+        # drive-independent (alpha = 0) part; matches the displaced-frame static
+        # coupling: (chi/2) n - chi n*nq - (chi'/2) a†²a²*nq - (K/2) a†²a²
+        chi, chi_prime, self_kerr, _ = self.mode.angular_rates()
+        c_n, c_nnq, c_qnq, c_q = chi / 2.0, -chi, -chi_prime / 2.0, -self_kerr / 2.0
         H = c_n * self.n + c_nnq * self.n * self.n_q
         H += c_qnq * self.quartic * self.n_q + c_q * self.quartic
         H += self.K_q / 2.0 * self.n_q * (self.n_q - self.I_op)
@@ -83,8 +76,8 @@ class RotatingFrameSimulator:
         tlist = np.arange(len(omega), dtype=float)
         sp = lambda arr: self._spline(tlist, arr)
 
-        eps_i, eps_q = cavity_drive_coefficients(epsilon)
-        drive_i, drive_q = ancilla_drive_coefficients(omega)
+        eps_i, eps_q = np.real(epsilon), np.imag(epsilon)
+        drive_i, drive_q = np.real(omega), np.imag(omega)
         return [
             [self.x_c,  sp(eps_i)],    # Re(ε)·(a+a†)
             [self.y_c,  sp(eps_q)],    # Im(ε)·i(a†−a)
@@ -96,7 +89,7 @@ class RotatingFrameSimulator:
         # γ1 D[q̂] + 2γφ D[n̂_q] + κ D[â]  (same collapse structure as the
         # displaced backend, rebuilt here independently)
         c_ops = []
-        _, _, _, kappa = storage_parameters(self.storage)
+        _, _, _, kappa = self.mode.angular_rates()
         if kappa > 0:
             c_ops.append(np.sqrt(kappa) * self.a)
         if T1_us is not None:

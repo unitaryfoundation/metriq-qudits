@@ -10,9 +10,9 @@ it to high fidelity.
 import numpy as np
 import pytest
 
-from metriq_qudits.benchmark.circuit_io import CompiledCircuit, save_circuits
+from metriq_qudits.compilation.circuit_io import CompiledCircuit, save_circuits
 from metriq_qudits.compilation.ecd_parameter_finder import run_circuit
-from metriq_qudits.pulses.pulse_stage import build_circuit_pulses
+from metriq_qudits.pulses.build import build_circuit_pulses
 from metriq_qudits.simulation.sweep import run_noiseless
 
 
