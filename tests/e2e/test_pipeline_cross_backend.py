@@ -8,8 +8,8 @@ agree. Cross-backend agreement is the correctness anchor for a real ECD+R circui
 
 import numpy as np
 
-from metriq_qudits.benchmark.circuit_io import CompiledCircuit, save_circuits
-from metriq_qudits.pulses.pulse_stage import build_circuit_pulses
+from metriq_qudits.compilation.circuit_io import CompiledCircuit, save_circuits
+from metriq_qudits.pulses.build import build_circuit_pulses
 from metriq_qudits.simulation.sweep import run_noiseless
 
 _METRICS = ("hog", "xeb", "fid")

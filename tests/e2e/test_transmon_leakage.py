@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
-from metriq_qudits.pulses.pulse_stage import make_ancilla, make_modes
-from metriq_qudits.simulation.displaced_frame_simulator_dq import DisplacedFrameSimulatorDQ
+from metriq_qudits.pulses.build import make_ancilla, make_modes
+from metriq_qudits.simulation.displaced_frame_dynamiqs import DisplacedFrameSimulatorDQ
 
 pytestmark = pytest.mark.slow
 

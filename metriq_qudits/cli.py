@@ -37,7 +37,7 @@ if platform.system() == "Darwin":
 
 from metriq_qudits.compilation.compile import compile_circuits
 from metriq_qudits.paths import output_dir, set_output_dir
-from metriq_qudits.pulses.pulse_stage import (
+from metriq_qudits.pulses.build import (
     CHI_KHZ,
     CHI_PRIME_HZ,
     SELF_KERR_HZ,
@@ -210,7 +210,7 @@ def main(argv=None) -> None:
     if args.plot_only:
         print(f"Output directory: {output_dir()}")
         print("Regenerating result figures from cache ...")
-        from metriq_qudits.plot_results import main as plot_main
+        from metriq_qudits.plotting.results import main as plot_main
 
         plot_main()
         return
@@ -270,7 +270,7 @@ def main(argv=None) -> None:
 
     if args.plot:
         print("\nGenerating result figures ...")
-        from metriq_qudits.plot_results import main as plot_main
+        from metriq_qudits.plotting.results import main as plot_main
 
         plot_main()
 

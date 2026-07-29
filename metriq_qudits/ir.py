@@ -29,7 +29,7 @@ import json
 
 import numpy as np
 
-from metriq_qudits.benchmark.circuit_io import CompiledCircuit
+from metriq_qudits.compilation.circuit_io import CompiledCircuit
 
 SCHEMA_VERSION = "metriq.ecd_rot.v1"
 

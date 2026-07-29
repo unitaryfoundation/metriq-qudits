@@ -7,7 +7,7 @@ import time
 
 import numpy as np
 
-from metriq_qudits.benchmark.circuit_io import load_circuits
+from metriq_qudits.compilation.circuit_io import load_circuits
 from metriq_qudits.parallel import parallel_map
 from metriq_qudits.paths import data_dir
 from metriq_qudits.pulses.drive_envelopes import CavityMode, TransmonAncilla
@@ -170,7 +170,7 @@ def build_circuit_pulses(
 
 def save_gate_trajectory_diagnostics(compiled_path: str, output_dir: str) -> None:
     """Plot the first nonzero ECD gate's g/e trajectory for each circuit."""
-    from metriq_qudits.plot_utils import save_conditional_trajectory_diag
+    from metriq_qudits.plotting.utils import save_conditional_trajectory_diag
 
     compiled, _ = load_circuits(compiled_path)
     compiler = ECDPulseBuilder(make_modes(1), make_ancilla())

@@ -1,4 +1,4 @@
-"""dynamiqs/JAX port of DisplacedFrameSimulator (see displaced_frame_simulator.py)
+"""dynamiqs/JAX port of DisplacedFrameSimulator (see displaced_frame.py)
 for GPU execution. It uses the same Hamiltonian, frame, and collapse operators and the same
 constructor and simulate()/to_physical_frame() interface. Time-dependent
 coefficients are linearly interpolated (the QuTiP version uses cubic splines).

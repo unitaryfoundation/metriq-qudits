@@ -7,7 +7,7 @@ import os
 import numpy as np
 from scipy.stats import unitary_group
 
-from metriq_qudits.benchmark.circuit_io import load_circuits, save_circuits
+from metriq_qudits.compilation.circuit_io import load_circuits, save_circuits
 from metriq_qudits.parallel import parallel_map
 from metriq_qudits.paths import data_dir
 from metriq_qudits.system_config import SystemConfig

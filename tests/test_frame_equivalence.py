@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from metriq_qudits.pulses.pulse_stage import make_modes
-from metriq_qudits.simulation.displaced_frame_simulator import DisplacedFrameSimulator
-from metriq_qudits.simulation.rotating_frame_simulator import RotatingFrameSimulator
+from metriq_qudits.pulses.build import make_modes
+from metriq_qudits.simulation.displaced_frame import DisplacedFrameSimulator
+from metriq_qudits.simulation.rotating_frame import RotatingFrameSimulator
 
 N_DISP = 20  # displaced frame stays near vacuum
 N_ROT = 30   # rotating frame holds the full displacement

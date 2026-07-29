@@ -20,8 +20,8 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
-from metriq_qudits.benchmark.gates import _ladder_ops, _embed_cavity, _ecd, _rotation_matrix
-from metriq_qudits.benchmark.circuit_io import CompiledCircuit
+from metriq_qudits.compilation.gates import _ladder_ops, _embed_cavity, _ecd, _rotation_matrix
+from metriq_qudits.compilation.circuit_io import CompiledCircuit
 from metriq_qudits.paths import output_dir
 
 # Persistent XLA compilation cache. Compile workers are spawned as fresh

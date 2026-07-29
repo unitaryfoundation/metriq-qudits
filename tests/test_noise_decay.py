@@ -6,7 +6,7 @@ import pytest
 import qutip as qt
 
 from metriq_qudits.pulses.drive_envelopes import CavityMode
-from metriq_qudits.simulation.displaced_frame_simulator import DisplacedFrameSimulator
+from metriq_qudits.simulation.displaced_frame import DisplacedFrameSimulator
 
 N_CAV = 16
 T_NS = 2000

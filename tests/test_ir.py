@@ -3,8 +3,8 @@ import json
 import numpy as np
 import pytest
 
-from metriq_qudits.benchmark.circuit_io import CompiledCircuit
-from metriq_qudits.benchmark.ir import (
+from metriq_qudits.compilation.circuit_io import CompiledCircuit
+from metriq_qudits.ir import (
     SCHEMA_VERSION,
     compiled_circuit_to_ir,
     save_ir,
