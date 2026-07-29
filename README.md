@@ -99,7 +99,7 @@ stages:
    [`compilation/ecd_parameter_finder.py`](metriq_qudits/compilation/ecd_parameter_finder.py).
 
 2. **Pulse construction.**
-   [`pulses/pulse_stage.py`](metriq_qudits/pulses/pulse_stage.py) converts
+   [`pulses/build.py`](metriq_qudits/pulses/build.py) converts
    the compiled ECD parameters into physical control pulses using
    [`pulses/ecd_pulse_builder.py`](metriq_qudits/pulses/ecd_pulse_builder.py).
 
@@ -107,10 +107,10 @@ stages:
    [`simulation/sweep.py`](metriq_qudits/simulation/sweep.py) runs the
    noiseless calculation and optional T1/T2 sweep. The physical model and
    simulator are implemented in
-   [`simulation/displaced_frame_simulator.py`](metriq_qudits/simulation/displaced_frame_simulator.py).
+   [`simulation/displaced_frame.py`](metriq_qudits/simulation/displaced_frame.py).
 
 4. **Results and plots.**
-   [`plot_results.py`](metriq_qudits/plot_results.py) loads the saved
+   [`plotting/results.py`](metriq_qudits/plotting/results.py) loads the saved
    simulation results and generates the figures under `outputs/plots/`.
 
 #### Calibration
@@ -135,7 +135,7 @@ optimizer (L-BFGS by default).
 - [Fast Universal Control of an Oscillator with Weak Dispersive Coupling to a Qubit](https://arxiv.org/abs/2111.06414)
   - The primary source for understanding ECD gates and the k-layer ansatz of
     alternating rotation and ECD gates used here (Fig. 1). Table S1 supplies the
-    Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/pulse_stage.py`.
+    Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/build.py`.
 - [Crosstalk-Robust Quantum Control in Multimode Bosonic Systems](https://arxiv.org/abs/2403.00275)
   - The theory for the displaced-frame Hamiltonian (Eqs. B3–B5) and its Lindblad
     dissipators (Eq. B6), the classical trajectory α(t) (Eq. B3), and the
