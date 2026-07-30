@@ -71,6 +71,7 @@ def _simulate_noise_point(args):
     t2_us = t2 * 1e6 if t2 is not None else None
 
     values = {metric: [] for metric in METRICS}
+    xeb_num = xeb_den = 0.0
     for pulse, target_state in zip(pulses, target_states):
         result, alpha = simulator.simulate(
             epsilon=pulse.cavity_drives[0],
@@ -84,15 +85,14 @@ def _simulate_noise_point(args):
             cavity_phase=pulse.final_cavity_phases[0],
         )
         cavity_state = physical_state.ptrace([0]).full()
-        metrics = eval_circuit(
-            cavity_state,
-            target_state,
-            d,
-            1,
-            n_cavity,
-        )
-        for metric, value in zip(METRICS, metrics):
-            values[metric].append(value)
+        m = eval_circuit(cavity_state, target_state, d, 1, n_cavity)
+        values["hog"].append(m.hog)
+        values["xeb"].append(m.xeb)
+        values["fid"].append(m.fid)
+        xeb_num += m.xeb_num
+        xeb_den += m.xeb_den
+    values["xeb_num_sum"] = xeb_num
+    values["xeb_den_sum"] = xeb_den
     return values
 
 
@@ -174,6 +174,7 @@ def run_noiseless(
     )
 
     values = {metric: [] for metric in METRICS}
+    xeb_num_sum = xeb_den_sum = 0.0
     start = time.perf_counter()
     for index, (pulse, circuit) in enumerate(zip(pulses, circuits)):
         result, alpha = simulator.simulate(
@@ -198,21 +199,18 @@ def run_noiseless(
             )
 
         cavity_state = final_state.ptrace([0]).full()
-        metrics = eval_circuit(
-            cavity_state,
-            circuit.target_state,
-            config.d,
-            1,
-            n_cavity,
-        )
-        for metric, value in zip(METRICS, metrics):
-            values[metric].append(value)
+        m = eval_circuit(cavity_state, circuit.target_state, config.d, 1, n_cavity)
+        values["hog"].append(m.hog)
+        values["xeb"].append(m.xeb)
+        values["fid"].append(m.fid)
+        xeb_num_sum += m.xeb_num
+        xeb_den_sum += m.xeb_den
 
         p_ground = float(final_state.ptrace([1])[0, 0].real)
         peak_photons = float(np.max(np.abs(alpha) ** 2))
         print(
             f"    {index + 1:>3}  {circuit.depth:>3}  "
-            f"{metrics[0]:>8.4f}  {metrics[1]:>8.4f}  {metrics[2]:>8.4f}  "
+            f"{m.hog:>8.4f}  {m.xeb:>8.4f}  {m.fid:>8.4f}  "
             f"{p_ground:>6.3f}  {peak_photons:>7.1f}  "
             f"{float(np.max(np.abs(circuit.betas))):>9.3f}",
             flush=True,
@@ -230,12 +228,15 @@ def run_noiseless(
         f"~ {estimated_hours:.1f} h at N_JOBS={n_jobs}"
     )
 
+    xeb_ensemble = xeb_num_sum / xeb_den_sum if xeb_den_sum > 1e-10 else 0.0
+    means = {
+        "hog": float(np.mean(values["hog"])),
+        "xeb": float(xeb_ensemble),
+        "fid": float(np.mean(values["fid"])),
+    }
     np.savez(
         output_path,
-        **{
-            f"{metric}_mean": float(np.mean(values[metric]))
-            for metric in METRICS
-        },
+        **{f"{metric}_mean": means[metric] for metric in METRICS},
         **{
             f"{metric}_per_circuit": np.asarray(values[metric])
             for metric in METRICS
@@ -248,7 +249,7 @@ def run_noiseless(
         **physics_metadata(correct_phases),
     )
     summary = "  ".join(
-        f"{metric.upper()}={np.mean(values[metric]):.4f}" for metric in METRICS
+        f"{metric.upper()}={means[metric]:.4f}" for metric in METRICS
     )
     print(f"  [noiseless] d={config.d}  {summary}  -> {os.path.basename(output_path)}")
     return output_path
@@ -337,6 +338,10 @@ def run_noise_sweep(
             standard_deviations[metric][i1, i2] = np.std(
                 values[metric], ddof=ddof,
             )
+        xeb_den = values["xeb_den_sum"]
+        means["xeb"][i1, i2] = (
+            values["xeb_num_sum"] / xeb_den if xeb_den > 1e-10 else 0.0
+        )
         summary = "  ".join(
             f"{metric.upper()}={means[metric][i1, i2]:.3f}"
             f"+/-{standard_deviations[metric][i1, i2]:.3f}"

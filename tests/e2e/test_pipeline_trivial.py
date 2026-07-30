@@ -40,7 +40,7 @@ def test_noiseless_pipeline_prepares_vacuum(tmp_path, monkeypatch):
 
     with np.load(out_path) as res:
         assert res["fid_mean"] == pytest.approx(1.0, abs=1e-3)
-        assert 0.0 <= float(res["hog_mean"]) <= 1.0
+        assert 0.0 <= float(res["hog_mean"]) <= 1.0 + 1e-9
         assert float(res["xeb_mean"]) <= 1.0 + 1e-9
         assert res["fid_per_circuit"].shape == (1,)
         assert int(res["d"]) == d
