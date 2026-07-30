@@ -100,7 +100,7 @@ def _load_inputs(pulse_path: str, compiled_path: str):
     circuits, metadata = load_circuits(compiled_path)
     pulses, _ = load_pulses(pulse_path)
     if int(metadata["num_modes"]) != 1:
-        raise ValueError("expected a single-qudit cache")
+        raise ValueError("expected a single-mode cache")
     config = SystemConfig(d=int(metadata["d"]))
     if len(pulses) != len(circuits):
         raise ValueError("pulse and compiled-circuit counts differ")

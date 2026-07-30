@@ -45,7 +45,7 @@ def _ecd_op(beta: complex) -> dict:
 
 
 def compiled_circuit_to_ir(circuit: CompiledCircuit, *, n_cav: int | None = None) -> dict:
-    """Serialize a single-qudit compiled circuit to the ``metriq.ecd_rot.v1`` IR.
+    """Serialize a compiled qudit circuit to the ``metriq.ecd_rot.v1`` IR.
 
     Parameters
     ----------

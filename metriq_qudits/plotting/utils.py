@@ -1,4 +1,4 @@
-"""Plotting helpers for the single-qudit ECD benchmark.
+"""Plotting helpers for the ECD benchmark.
 
 Two groups of functions:
 

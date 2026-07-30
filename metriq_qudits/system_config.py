@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class SystemConfig:
-    """Single-qudit logical system.
+    """Logical qudit system.
 
     Physical parameters belong beside the numerical stage that uses them.
     this object only identifies the system whose results are being produced.

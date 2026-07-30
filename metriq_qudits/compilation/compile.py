@@ -337,7 +337,7 @@ def compile_circuits(
     data_dir("compiled_circuits").mkdir(parents=True, exist_ok=True)
     data_dir("calibration").mkdir(parents=True, exist_ok=True)
     if config.dimension != config.d:
-        raise ValueError("expected a single-qudit system")
+        raise ValueError("expected a single-mode system")
 
     depth_floor = parameter_counting_floor(config)
     calibration_depth = heuristic_depth(config)

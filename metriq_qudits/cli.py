@@ -1,4 +1,4 @@
-"""Command-line interface for the ECD quantum-volume pipeline.
+"""Command-line interface for the ECD benchmark pipeline.
 
 Examples:
     # Smallest system, skip the T1/T2 sweep
@@ -48,7 +48,7 @@ from metriq_qudits.simulation.sweep import T1_VALUES, T2_VALUES
 
 def _parse_args(argv=None):
     parser = argparse.ArgumentParser(
-        description="ECD-QV pipeline",
+        description="ECD benchmark pipeline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

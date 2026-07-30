@@ -1,1 +1,1 @@
-"""ECD quantum-volume compilation and simulation tools."""
+"""ECD compilation and simulation toolkit for qudit benchmarks."""

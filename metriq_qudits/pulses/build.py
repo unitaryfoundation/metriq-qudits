@@ -103,7 +103,7 @@ def build_circuit_pulses(
     """Build and cache physical waveforms for every compiled circuit."""
     compiled, metadata = load_circuits(compiled_path)
     if int(metadata["num_modes"]) != 1:
-        raise ValueError("expected a single-qudit pulse cache")
+        raise ValueError("expected a single-mode pulse cache")
     config = SystemConfig(d=int(metadata["d"]))
     output_path = pulse_path(config, metadata, correct_phases)
     data_dir("pulses").mkdir(parents=True, exist_ok=True)
