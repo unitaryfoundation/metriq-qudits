@@ -6,6 +6,10 @@ developed in parallel with the qubit benchmarks implemented in
 the benchmarking ecosystem described in the
 [Metriq paper](https://arxiv.org/abs/2603.08680).
 
+Currently `metriq-qudits` implements the quantum volume benchmark, which lives under
+[`metriq_qudits/benchmarks/`](metriq_qudits/benchmarks/). More benchmarks are
+planned and will be added to the benchmarks folder alongside quantum volume.
+
 
 ## Installation
 
