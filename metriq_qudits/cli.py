@@ -35,71 +35,15 @@ import numpy as np
 if platform.system() == "Darwin":
     os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from metriq_qudits.compilation.compile import compile_circuits
-from metriq_qudits.paths import output_dir, set_output_dir
-from metriq_qudits.pulses.build import (
-    CHI_KHZ,
-    CHI_PRIME_HZ,
-    SELF_KERR_HZ,
-    build_circuit_pulses,
+from metriq_qudits.benchmarks.quantum_volume import (
+    CONFIGS,
+    CONFIG_BY_KEY,
+    N_JOBS,
+    run_experiment,
 )
-from metriq_qudits.simulation.sweep import T1_VALUES, T2_VALUES, run_noise_sweep, run_noiseless
-from metriq_qudits.system_config import SystemConfig
-
-N_JOBS = int(os.environ.get("N_JOBS", "1"))
-
-CONFIGS = tuple(SystemConfig(d=d) for d in (4, 6, 8, 10, 12, 14, 16))
-CONFIG_BY_KEY = {config.key: config for config in CONFIGS}
-
-
-def run_experiment(
-    config: SystemConfig,
-    *,
-    correct_phases: bool = True,
-    backend: str = "dynamiqs",
-    include_noise_sweep: bool = True,
-    overwrite: bool = False,
-    n_jobs: int = N_JOBS,
-    optimizer: str = "lbfgs",
-    use_probe: bool = False,
-    t1_values: np.ndarray | None = None,
-    t2_values: np.ndarray | None = None,
-) -> None:
-    """Execute compilation, pulse construction, and simulation."""
-    compiled_path = compile_circuits(
-        config, overwrite=overwrite, n_jobs=n_jobs, optimizer=optimizer,
-        use_probe=use_probe,
-    )
-
-    pulse_path = build_circuit_pulses(
-        compiled_path,
-        correct_phases=correct_phases,
-        overwrite=overwrite,
-        n_jobs=n_jobs,
-    )
-
-    run_noiseless(
-        pulse_path,
-        compiled_path,
-        correct_phases=correct_phases,
-        backend=backend,
-        diagnostics_dir=None,
-        overwrite=overwrite,
-        n_jobs=n_jobs,
-        t1_values=t1_values,
-        t2_values=t2_values,
-    )
-    if include_noise_sweep:
-        run_noise_sweep(
-            pulse_path,
-            compiled_path,
-            correct_phases=correct_phases,
-            backend=backend,
-            overwrite=overwrite,
-            n_jobs=n_jobs,
-            t1_values=t1_values,
-            t2_values=t2_values,
-        )
+from metriq_qudits.paths import output_dir, set_output_dir
+from metriq_qudits.pulses.build import CHI_KHZ, CHI_PRIME_HZ, SELF_KERR_HZ
+from metriq_qudits.simulation.sweep import T1_VALUES, T2_VALUES
 
 
 def _parse_args(argv=None):
