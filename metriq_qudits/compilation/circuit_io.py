@@ -42,6 +42,44 @@ class CompiledCircuit:
         return np.abs(self.target_state) ** 2
 
 
+def save_circuit(path: str, circuit: CompiledCircuit) -> None:
+    """Write one compiled circuit to its own npz.
+
+    Per-unitary files need no batch padding: a single circuit's arrays are all
+    regular, so this is a plain dump of its fields."""
+    arrays = {
+        "betas": circuit.betas,
+        "rotations": circuit.rotations,
+        "target_state": circuit.target_state,
+        "infidelity": circuit.infidelity,
+        "boundary_leakage": circuit.boundary_leakage,
+    }
+    if circuit.optimization_trace is not None:
+        arrays["optimization_trace"] = circuit.optimization_trace
+    if circuit.depth_sweep is not None:
+        arrays["depth_sweep"] = circuit.depth_sweep
+    np.savez(path, **arrays)
+
+
+def load_circuit(path: str) -> CompiledCircuit:
+    """Load one compiled circuit written by save_circuit."""
+    with np.load(path, allow_pickle=False) as data:
+        return CompiledCircuit(
+            betas=data["betas"],
+            rotations=data["rotations"],
+            target_state=data["target_state"],
+            infidelity=float(data["infidelity"]),
+            boundary_leakage=float(data["boundary_leakage"]),
+            optimization_trace=(
+                data["optimization_trace"]
+                if "optimization_trace" in data.files else None
+            ),
+            depth_sweep=(
+                data["depth_sweep"] if "depth_sweep" in data.files else None
+            ),
+        )
+
+
 def save_circuits(circuits: list[CompiledCircuit], config: dict, path: str) -> None:
     num_modes = config["num_modes"]
     k_per     = np.array([c.depth for c in circuits], dtype=np.int32)
