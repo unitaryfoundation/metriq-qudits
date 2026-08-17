@@ -121,14 +121,13 @@ def simulate_circuits(pulses, *, n_cavity: int, backend: str = "dynamiqs",
     return list(parallel_map(worker, pulses, n_jobs))
 
 
-def save_scores(path, metrics) -> None:
-    """Aggregate per-circuit (hog, xeb, fid) scores into a summary npz."""
-    scored = np.array([m for m in metrics if m is not None], dtype=float)
-    if scored.size == 0:
-        raise ValueError("no circuits were scored")
-    hog, xeb, fid = scored[:, 0], scored[:, 1], scored[:, 2]
-    np.savez(
-        str(path),
-        hog=hog, xeb=xeb, fid=fid,
-        hog_mean=hog.mean(), xeb_mean=xeb.mean(), fid_mean=fid.mean(),
-    )
+def save_result(path, result) -> None:
+    """Persist a benchmark result's metric fields to an npz."""
+    np.savez(str(path), **{key: np.asarray(value)
+                           for key, value in result.model_dump().items()})
+
+
+def load_result(path, result_cls):
+    """Load a benchmark result of the given type from an npz."""
+    with np.load(str(path)) as data:
+        return result_cls(**{key: data[key].tolist() for key in data.files})
