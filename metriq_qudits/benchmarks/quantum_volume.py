@@ -14,6 +14,7 @@ if platform.system() == "Darwin":
 from pathlib import Path
 
 import numpy as np
+from pydantic import BaseModel
 from scipy.stats import unitary_group
 
 from metriq_qudits.benchmarks.helpers import (
@@ -55,6 +56,7 @@ def sample_targets(config: SystemConfig, n_unitaries: int, seed: int) -> list[np
 
 def run_qv_experiment(
     config: SystemConfig,
+    params: BaseModel,
     *,
     correct_phases: bool = True,
     backend: str = "dynamiqs",
@@ -62,12 +64,12 @@ def run_qv_experiment(
     overwrite: bool = False,
     n_jobs: int = N_JOBS,
     optimizer: str = "lbfgs",
-    n_unitaries: int = 25,
-    seed: int = 42,
     t1_values: np.ndarray | None = None,
     t2_values: np.ndarray | None = None,
 ) -> None:
     """Execute compilation, pulse construction, and simulation."""
+    n_unitaries = params.n_unitaries
+    seed = params.seed
     t1_values = T1_US if t1_values is None else t1_values
     t2_values = T2_US if t2_values is None else t2_values
     circuits_dir = run_dir(config) / "circuits"
