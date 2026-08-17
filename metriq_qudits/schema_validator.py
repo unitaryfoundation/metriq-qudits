@@ -75,9 +75,13 @@ def load_and_validate(path) -> BaseModel:
     return validate_and_create_model(load_json_file(path))
 
 
-def load_device(path) -> BaseModel:
-    """Load a simulated-device config file and return its validated model."""
-    config = load_json_file(path)
+def validate_device(config: dict[str, Any]) -> BaseModel:
+    """Validate a device config dict against the device schema."""
     schema = load_json_file(SCHEMA_DIR / DEVICE_SCHEMA)
     validate(config, schema)
     return create_pydantic_model(schema)(**config)
+
+
+def load_device(path) -> BaseModel:
+    """Load a simulated-device config file and return its validated model."""
+    return validate_device(load_json_file(path))
