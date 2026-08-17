@@ -7,14 +7,16 @@ import platform
 if platform.system() == "Darwin":
     os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
-from dataclasses import dataclass
-
 import numpy as np
 from scipy.stats import unitary_group
 
 from metriq_qudits.benchmarks.benchmark import Benchmark, BenchmarkResult
 from metriq_qudits.benchmarks.helpers import N_JOBS, compile_circuits
-from metriq_qudits.compilation.ecd_parameter_finder import OptimizerConfig
+from metriq_qudits.compilation.calibration import (
+    Calibration,
+    compile_config,
+    load_or_calibrate,
+)
 from metriq_qudits.metrics import eval_circuit
 from metriq_qudits.system_config import SystemConfig
 
@@ -39,16 +41,6 @@ class QVResult(BenchmarkResult):
         return float(np.mean(self.fid))
 
 
-@dataclass(frozen=True)
-class Calibration:
-    """Per-config Fock truncation, penalty count, and depth window."""
-
-    n_cavity: int
-    n_penalize: int
-    k_start: int
-    k_max: int
-
-
 class QuantumVolume(Benchmark):
     result_cls = QVResult
 
@@ -59,14 +51,16 @@ class QuantumVolume(Benchmark):
                 for _ in range(self.params.n_unitaries)]
 
     def calibrate(self, config: SystemConfig) -> Calibration:
-        # Provisional truncation and depth window (calibration pass sets these later).
-        d = config.d
-        return Calibration(n_cavity=d + 4, n_penalize=0, k_start=1, k_max=4 * d)
+        return load_or_calibrate(
+            self.run_dir(config) / "calibration.npz", config.d,
+            overwrite=getattr(self.args, "overwrite", False),
+            n_jobs=getattr(self.args, "n_jobs", N_JOBS),
+        )
 
     def compile(self, config: SystemConfig, targets, cal: Calibration):
         return compile_circuits(
             targets, d=config.d, n_cavity=cal.n_cavity, k_init=cal.k_start,
-            k_max=cal.k_max, optimizer_config=OptimizerConfig(n_penalize=cal.n_penalize),
+            k_max=cal.k_max, optimizer_config=compile_config(cal),
             n_jobs=getattr(self.args, "n_jobs", N_JOBS),
         )
 
