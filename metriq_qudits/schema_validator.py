@@ -11,6 +11,7 @@ from metriq_qudits.constants import SCHEMA_MAPPING, JobType
 
 SCHEMA_DIR = Path(__file__).parent / "schemas"
 BENCHMARK_NAME_KEY = "benchmark_name"
+DEVICE_SCHEMA = "simulator_device.schema.json"
 
 _TYPE_MAPPING = {
     "string": str,
@@ -72,3 +73,11 @@ def validate_and_create_model(config: dict[str, Any]) -> BaseModel:
 def load_and_validate(path) -> BaseModel:
     """Load a benchmark config file and return its validated params model."""
     return validate_and_create_model(load_json_file(path))
+
+
+def load_device(path) -> BaseModel:
+    """Load a simulated-device config file and return its validated model."""
+    config = load_json_file(path)
+    schema = load_json_file(SCHEMA_DIR / DEVICE_SCHEMA)
+    validate(config, schema)
+    return create_pydantic_model(schema)(**config)

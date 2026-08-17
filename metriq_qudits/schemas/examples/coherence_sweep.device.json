@@ -1,0 +1,6 @@
+{
+  "name": "coherence_sweep",
+  "backend": "dynamiqs",
+  "t1_us": [5, 50, 100],
+  "t2_us": [10, 100, 200]
+}

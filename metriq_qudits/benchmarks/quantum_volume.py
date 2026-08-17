@@ -33,10 +33,6 @@ from metriq_qudits.system_config import SystemConfig
 
 BENCHMARK_NAME = "quantum_volume"
 
-# Ancilla coherence grid for the T1/T2 noise sweep, in microseconds.
-T1_US = (5.0, 50.0, 100.0)
-T2_US = (10.0, 100.0, 200.0)
-
 CONFIGS = tuple(SystemConfig(d=d) for d in (4, 6, 8, 10, 12, 14, 16))
 CONFIG_BY_KEY = {config.key: config for config in CONFIGS}
 
@@ -57,21 +53,19 @@ def sample_targets(config: SystemConfig, n_unitaries: int, seed: int) -> list[np
 def run_qv_experiment(
     config: SystemConfig,
     params: BaseModel,
+    device: BaseModel,
     *,
     correct_phases: bool = True,
-    backend: str = "dynamiqs",
-    include_noise_sweep: bool = True,
     overwrite: bool = False,
     n_jobs: int = N_JOBS,
     optimizer: str = "lbfgs",
-    t1_values: np.ndarray | None = None,
-    t2_values: np.ndarray | None = None,
 ) -> None:
     """Execute compilation, pulse construction, and simulation."""
     n_unitaries = params.n_unitaries
     seed = params.seed
-    t1_values = T1_US if t1_values is None else t1_values
-    t2_values = T2_US if t2_values is None else t2_values
+    backend = device.backend
+    t1_values = device.t1_us
+    t2_values = device.t2_us
     circuits_dir = run_dir(config) / "circuits"
     pulses_dir = run_dir(config) / "pulses"
     circuits_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +92,8 @@ def run_qv_experiment(
         save_pulses(pulse_paths, pulses)
 
     # Simulation stage (noiseless): simulate each pulse, then score the states separately.
-    metrics_dir = run_dir(config) / "metrics"
+    # Circuits and pulses are noise-independent, so scores are namespaced per device.
+    metrics_dir = run_dir(config) / "metrics" / device.name
     metrics_dir.mkdir(parents=True, exist_ok=True)
     noiseless_path = metrics_dir / "noiseless.npz"
     if overwrite or not noiseless_path.exists():
@@ -116,7 +111,8 @@ def run_qv_experiment(
               f"XEB={float(summary['xeb_mean']):.4f}  F={float(summary['fid_mean']):.4f}")
 
     # Noise sweep: one aggregated file per (T1, T2) grid point, keeping T2 <= 2 T1.
-    if include_noise_sweep:
+    # Empty grids (an ideal device) run the noiseless baseline only.
+    if t1_values and t2_values:
         sweep_dir = metrics_dir / "sweep"
         sweep_dir.mkdir(parents=True, exist_ok=True)
         n_cavity = config.d + 4  # provisional truncation (matches compile_circuit)

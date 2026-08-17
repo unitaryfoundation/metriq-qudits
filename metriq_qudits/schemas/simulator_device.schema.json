@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "metriq-qudits/simulator_device.schema.json",
+  "title": "simulator_device",
+  "description": "A simulated device: the numerical backend and the T1/T2 coherence grid to characterize a benchmark against. Empty grids mean the noiseless baseline only.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Identity used to namespace this device's score artifacts."
+    },
+    "backend": {
+      "type": "string",
+      "enum": ["dynamiqs", "qutip"],
+      "default": "dynamiqs",
+      "description": "Physical simulator backend."
+    },
+    "t1_us": {
+      "type": "array",
+      "items": {"type": "number", "exclusiveMinimum": 0},
+      "default": [],
+      "description": "Ancilla T1 sweep grid, in microseconds."
+    },
+    "t2_us": {
+      "type": "array",
+      "items": {"type": "number", "exclusiveMinimum": 0},
+      "default": [],
+      "description": "Ancilla T2 sweep grid, in microseconds."
+    }
+  },
+  "required": ["name"]
+}
