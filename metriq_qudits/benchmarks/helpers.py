@@ -1,0 +1,134 @@
+"""
+Pure, benchmark-agnostic pipeline stages: pulse building, simulation, and score
+aggregation. Object in, object out, with no run directories or benchmark parameters.
+"""
+
+from __future__ import annotations
+
+import os
+import platform
+
+# JAX can otherwise select an unsupported backend while importing the simulator.
+if platform.system() == "Darwin":
+    os.environ.setdefault("JAX_PLATFORMS", "cpu")
+
+from functools import partial
+
+import numpy as np
+
+from metriq_qudits.compilation.circuit_io import CompiledCircuit
+from metriq_qudits.compilation.ecd_parameter_finder import (
+    ECDParameterFinder,
+    OptimizerConfig,
+)
+from metriq_qudits.parallel import parallel_map
+from metriq_qudits.pulses.drive_envelopes import CavityMode, TransmonAncilla
+from metriq_qudits.pulses.ecd_pulse_builder import CircuitWaveforms, ECDPulseBuilder
+from metriq_qudits.simulation.displaced_frame import DisplacedFrameSimulator
+from metriq_qudits.simulation.displaced_frame_dynamiqs import DisplacedFrameSimulatorDQ
+
+N_JOBS = int(os.environ.get("N_JOBS", "1"))
+
+
+def compile_circuit(unitary: np.ndarray, *, d: int, n_cavity: int, k_init: int,
+                    k_max: int, optimizer_config: OptimizerConfig) -> CompiledCircuit | None:
+    """Compile one target to the shallowest converging ECD circuit, or None.
+
+    Pure: the truncation and depth window are supplied by the caller (the benchmark's
+    compile policy), so nothing here is benchmark-specific."""
+    finder = ECDParameterFinder(d=d, num_modes=1, config=optimizer_config)
+    return finder.find_parameters_adaptive_k(
+        unitary, k_init=k_init, k_max=k_max, N=n_cavity,
+        rng=np.random.default_rng(),
+    )
+
+
+def compile_circuits(unitaries: list[np.ndarray], *, d: int, n_cavity: int,
+                     k_init: int, k_max: int, optimizer_config: OptimizerConfig,
+                     n_jobs: int = N_JOBS) -> list[CompiledCircuit | None]:
+    """Compile the whole ensemble in parallel. Order preserved."""
+    worker = partial(compile_circuit, d=d, n_cavity=n_cavity, k_init=k_init,
+                     k_max=k_max, optimizer_config=optimizer_config)
+    return list(parallel_map(worker, unitaries, n_jobs))
+
+
+# Peak intra-gate cavity displacement used when shaping ECD pulses (Eickbusch et al. 2022).
+# Device physics (chi, chi_prime, self-Kerr, ancilla timing) lives in the CavityMode and
+# TransmonAncilla dataclass defaults.
+PEAK_DISPLACEMENT = 10.0
+
+
+def build_circuit_pulse(circuit: CompiledCircuit | None, *,
+                        peak_displacement: float = PEAK_DISPLACEMENT,
+                        correct_phases: bool = True) -> CircuitWaveforms | None:
+    """Build one circuit's physical waveforms. Pure: object in, object out."""
+    if circuit is None:
+        return None
+    builder = ECDPulseBuilder([CavityMode()], TransmonAncilla())
+    return builder.compile_circuit(
+        betas=circuit.betas,
+        rotations=circuit.rotations,
+        peak_amplitude=peak_displacement,
+        correct_cavity_phases=correct_phases,
+    )
+
+
+def build_circuit_pulses(circuits: list[CompiledCircuit | None], *,
+                         peak_displacement: float = PEAK_DISPLACEMENT,
+                         correct_phases: bool = True,
+                         n_jobs: int = N_JOBS) -> list[CircuitWaveforms | None]:
+    """Build waveforms for the whole ensemble in parallel. Order preserved."""
+    worker = partial(build_circuit_pulse, peak_displacement=peak_displacement,
+                     correct_phases=correct_phases)
+    return list(parallel_map(worker, circuits, n_jobs))
+
+
+def make_simulator(backend: str, n_cavity: int):
+    """Construct the displaced-frame simulator for one backend."""
+    if backend == "dynamiqs":
+        return DisplacedFrameSimulatorDQ(cavity_dim=n_cavity, mode=CavityMode())
+    return DisplacedFrameSimulator(cavity_dim=n_cavity, mode=CavityMode())
+
+
+def simulate_circuit(pulse: CircuitWaveforms | None, *, n_cavity: int,
+                     backend: str = "dynamiqs",
+                     t1_us: float | None = None,
+                     t2_us: float | None = None) -> np.ndarray | None:
+    """Simulate one pulse and return the physical cavity density matrix.
+
+    Pure: object in, state out. Scoring the state against a target is separate."""
+    if pulse is None:
+        return None
+    simulator = make_simulator(backend, n_cavity)
+    result, alpha = simulator.simulate(
+        epsilon=pulse.cavity_drives[0],
+        omega=pulse.ancilla_drive,
+        T1_us=t1_us,
+        T2_us=t2_us,
+    )
+    final_state = simulator.to_physical_frame(
+        result.states[-1], alpha, cavity_phase=pulse.final_cavity_phases[0],
+    )
+    return final_state.ptrace([0]).full()
+
+
+def simulate_circuits(pulses, *, n_cavity: int, backend: str = "dynamiqs",
+                      t1_us: float | None = None, t2_us: float | None = None,
+                      n_jobs: int = N_JOBS) -> list[np.ndarray | None]:
+    """Simulate the ensemble in parallel. Order preserved (None where a pulse is missing)."""
+    worker = partial(simulate_circuit, n_cavity=n_cavity, backend=backend,
+                     t1_us=t1_us, t2_us=t2_us)
+    return list(parallel_map(worker, pulses, n_jobs))
+
+
+def save_scores(path, metrics) -> None:
+    """Aggregate per-circuit (hog, xeb, fid) scores into a summary npz."""
+    scored = np.array([m for m in metrics if m is not None], dtype=float)
+    if scored.size == 0:
+        raise ValueError("no circuits were scored")
+    hog, xeb, fid = scored[:, 0], scored[:, 1], scored[:, 2]
+    np.savez(
+        str(path),
+        hog=hog, xeb=xeb, fid=fid,
+        hog_mean=hog.mean(), xeb_mean=xeb.mean(), fid_mean=fid.mean(),
+    )
