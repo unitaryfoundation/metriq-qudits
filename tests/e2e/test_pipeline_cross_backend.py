@@ -33,5 +33,6 @@ def test_qutip_and_dynamiqs_pipelines_agree():
     metrics = {}
     for backend in ("qutip", "dynamiqs"):
         state = simulate_circuit(pulse, n_cavity=n_cav, backend=backend)
-        metrics[backend] = np.array(eval_circuit(state, circuit.target_state, d, 1, n_cav))
+        m = eval_circuit(state, circuit.target_state, d, 1, n_cav)
+        metrics[backend] = np.array([m.hog, m.xeb, m.fid])
     np.testing.assert_allclose(metrics["qutip"], metrics["dynamiqs"], atol=1e-2)

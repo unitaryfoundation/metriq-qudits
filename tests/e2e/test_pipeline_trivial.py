@@ -31,7 +31,7 @@ def test_noiseless_pipeline_prepares_vacuum():
     circuit = _trivial_circuit(d, depth)
     pulse = build_circuit_pulse(circuit)
     state = simulate_circuit(pulse, n_cavity=n_cav, backend="qutip")
-    hog, xeb, fid = eval_circuit(state, circuit.target_state, d, 1, n_cav)
-    assert fid == pytest.approx(1.0, abs=1e-3)
-    assert 0.0 <= hog <= 1.0
-    assert xeb <= 1.0 + 1e-9
+    m = eval_circuit(state, circuit.target_state, d, 1, n_cav)
+    assert m.fid == pytest.approx(1.0, abs=1e-3)
+    assert 0.0 <= m.hog <= 1.0 + 1e-9
+    assert m.xeb <= 1.0 + 1e-9

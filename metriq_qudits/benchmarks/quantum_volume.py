@@ -22,19 +22,23 @@ from metriq_qudits.system_config import SystemConfig
 
 
 class QVResult(BenchmarkResult):
-    """Per-circuit HOG, XEB, and fidelity for one simulated ensemble."""
+    """Per-circuit HOG, XEB terms, and fidelity for one simulated ensemble."""
 
     hog: list[float]
     xeb: list[float]
     fid: list[float]
+    xeb_num: list[float]  # D * (p . q) - 1    realized signal: measured p against ideal q
+    xeb_den: list[float]  # D * (q . q) - 1    ideal signal: the value for a perfect device
 
     @property
     def hog_mean(self) -> float:
         return float(np.mean(self.hog))
 
     @property
-    def xeb_mean(self) -> float:
-        return float(np.mean(self.xeb))
+    def xeb_normalized(self) -> float:
+        # Ratio of sums over the ensemble (Bornman et al. 2024, Eqs 17-18).
+        den = float(np.sum(self.xeb_den))
+        return float(np.sum(self.xeb_num) / den) if den > 1e-10 else 0.0
 
     @property
     def fid_mean(self) -> float:
@@ -70,5 +74,10 @@ class QuantumVolume(Benchmark):
                    if state is not None and psi is not None]
         if not metrics:
             raise ValueError("no circuits were scored")
-        hog, xeb, fid = zip(*metrics)
-        return QVResult(hog=list(hog), xeb=list(xeb), fid=list(fid))
+        return QVResult(
+            hog=[m.hog for m in metrics],
+            xeb=[m.xeb for m in metrics],
+            fid=[m.fid for m in metrics],
+            xeb_num=[m.xeb_num for m in metrics],
+            xeb_den=[m.xeb_den for m in metrics],
+        )

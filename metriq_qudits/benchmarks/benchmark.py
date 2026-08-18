@@ -97,7 +97,7 @@ class Benchmark:
             save_result(noiseless_path, self.score(config, states, targets, cal))
         result = load_result(noiseless_path, self.result_cls)
         print(f"  [noiseless] {config.key}  HOG={result.hog_mean:.4f}  "
-              f"XEB={result.xeb_mean:.4f}  F={result.fid_mean:.4f}")
+              f"XEB={result.xeb_normalized:.4f}  F={result.fid_mean:.4f}")
 
         # Noise sweep: one aggregated file per (T1, T2) grid point, keeping T2 <= 2 T1.
         # Empty grids (an ideal device) run the noiseless baseline only.
@@ -118,6 +118,6 @@ class Benchmark:
                     point = self.score(config, states, targets, cal)
                     save_result(point_path, point)
                     print(f"  [sweep] T1={t1_us:.0f}us T2={t2_us:.0f}us  "
-                          f"HOG={point.hog_mean:.3f}  XEB={point.xeb_mean:.3f}  "
+                          f"HOG={point.hog_mean:.3f}  XEB={point.xeb_normalized:.3f}  "
                           f"F={point.fid_mean:.3f}")
         return result

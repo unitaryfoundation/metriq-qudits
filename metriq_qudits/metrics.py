@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -29,7 +30,10 @@ def computational_indices(d: int, num_modes: int, N_cav: int) -> np.ndarray:
 
 
 def ecd_probs(rho_cav: np.ndarray, d: int, num_modes: int, N_cav: int) -> np.ndarray:
-    """Computational-subspace probabilities from the cavity density matrix.
+    """Computational-subspace populations from the cavity density matrix.
+
+    The raw diagonal populations, with negative numerical noise clipped to zero.
+    Leakage outside the subspace is not added back, so these need not sum to 1.
 
     Parameters
     ----------
@@ -41,12 +45,10 @@ def ecd_probs(rho_cav: np.ndarray, d: int, num_modes: int, N_cav: int) -> np.nda
     Returns
     -------
     numpy.ndarray of float
-        Probabilities on the d**num_modes computational outcomes: non-negative
-        and summing to 1 (negative diagonal noise is clipped, then renormalized).
+        Populations on the d**num_modes computational outcomes.
     """
     idx = computational_indices(d, num_modes, N_cav)
-    p = np.maximum(np.real(np.diag(rho_cav))[idx], 0.0)
-    return p / p.sum()
+    return np.maximum(np.real(np.diag(rho_cav))[idx], 0.0)
 
 
 def state_fidelity(
@@ -93,50 +95,49 @@ def compute_hog(p: np.ndarray, q: np.ndarray) -> float:
     return float(np.sum(p[q > np.median(q)]))
 
 
-def compute_xeb(p: np.ndarray, q: np.ndarray, D: int) -> float:
-    """Normalized linear cross-entropy benchmark: 0 = fully mixed, 1 = ideal.
+def xeb_terms(p: np.ndarray, q: np.ndarray, D: int) -> tuple[float, float]:
+    """XEB numerator and denominator for one circuit.
 
-    Parameters
-    ----------
-    p : numpy.ndarray of float
-        Measured/noisy output probabilities (sum to 1), length D.
-    q : numpy.ndarray of float
-        Ideal output probabilities (sum to 1), same length as ``p``.
-    D : int
-        Computational-subspace dimension, D = d**num_modes.
-
-    Returns
-    -------
-    float
-        Normalized XEB (0 for the fully mixed distribution, 1 for the ideal one);
-        returns 0.0 when the ideal distribution is (near) uniform.
+    Sum each across the circuit ensemble and divide to get the reported XEB.
     """
-    num = D * np.dot(p, q) - 1
-    den = D * np.dot(q, q) - 1
+    num = D * float(np.dot(p, q)) - 1.0
+    den = D * float(np.dot(q, q)) - 1.0
+    return num, den
+
+
+def compute_xeb(p: np.ndarray, q: np.ndarray, D: int) -> float:
+    """Normalized linear XEB for one circuit: 0 = fully mixed, 1 = ideal.
+
+    The single-circuit ratio. For an ensemble, sum :func:`xeb_terms` and divide.
+    """
+    num, den = xeb_terms(p, q, D)
     return 0.0 if den < 1e-10 else float(num / den)
+
+
+@dataclass
+class CircuitMetrics:
+    """HOG, XEB, and fidelity for one circuit, with the XEB terms to sum."""
+
+    hog: float
+    xeb: float
+    fid: float
+    xeb_num: float
+    xeb_den: float
 
 
 def eval_circuit(
     rho: np.ndarray, psi: np.ndarray, d: int, num_modes: int, N_cav: int,
-) -> tuple[float, float, float]:
-    """Compute (HOG, XEB, fidelity) for one simulated circuit.
-
-    Parameters
-    ----------
-    rho : numpy.ndarray of complex
-        Cavity density matrix, shape (N_cav**num_modes, N_cav**num_modes).
-    psi : numpy.ndarray of complex
-        Normalized target-state amplitudes, length d**num_modes.
-    d, num_modes, N_cav : int
-        See :func:`computational_indices`.
-
-    Returns
-    -------
-    (float, float, float)
-        HOG, XEB, and state fidelity for this circuit.
-    """
+) -> CircuitMetrics:
+    """HOG, XEB, and fidelity for one simulated circuit."""
     D = d ** num_modes
     q = np.abs(psi) ** 2
     p = ecd_probs(np.array(rho), d, num_modes, N_cav)
-    fid = state_fidelity(rho, psi, d, num_modes, N_cav)
-    return compute_hog(p, q), compute_xeb(p, q, D), fid
+    num, den = xeb_terms(p, q, D)
+    xeb = 0.0 if den < 1e-10 else float(num / den)
+    return CircuitMetrics(
+        hog=compute_hog(p, q),
+        xeb=xeb,
+        fid=state_fidelity(rho, psi, d, num_modes, N_cav),
+        xeb_num=num,
+        xeb_den=den,
+    )

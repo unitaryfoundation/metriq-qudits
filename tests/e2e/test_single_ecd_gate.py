@@ -34,5 +34,5 @@ def test_dq_pipeline_reproduces_single_ecd_state():
     )
     pulse = build_circuit_pulse(circuit)
     state = simulate_circuit(pulse, n_cavity=n_cav, backend="dynamiqs")
-    _, _, fid = eval_circuit(state, target, d, 1, n_cav)
+    fid = eval_circuit(state, target, d, 1, n_cav).fid
     assert fid > 0.99

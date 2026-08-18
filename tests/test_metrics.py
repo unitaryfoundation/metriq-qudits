@@ -33,19 +33,18 @@ def test_computational_indices_two_modes():
 
 # ── ecd_probs ──────────────────────────────────────────────────────────────
 
-def test_ecd_probs_selects_and_normalizes():
+def test_ecd_probs_selects_computational_populations():
     rho = np.diag([0.5, 0.3, 0.1, 0.05, 0.05]).astype(complex)
     p = ecd_probs(rho, d=3, num_modes=1, N_cav=5)
-    # only the first 3 Fock levels, renormalized to sum 1
-    np.testing.assert_allclose(p, np.array([0.5, 0.3, 0.1]) / 0.9)
-    assert p.sum() == pytest.approx(1.0)
+    # first 3 Fock levels, raw populations (leakage not added back)
+    np.testing.assert_allclose(p, [0.5, 0.3, 0.1])
+    assert p.sum() == pytest.approx(0.9)
 
 
 def test_ecd_probs_clips_negative_diagonal():
     rho = np.diag([0.6, -0.01, 0.41]).astype(complex)
     p = ecd_probs(rho, d=3, num_modes=1, N_cav=3)
-    assert p[1] == 0.0
-    assert p.sum() == pytest.approx(1.0)
+    np.testing.assert_allclose(p, [0.6, 0.0, 0.41])
 
 
 # ── state_fidelity ─────────────────────────────────────────────────────────
@@ -95,8 +94,8 @@ def test_xeb_returns_zero_when_denominator_degenerate():
 def test_eval_circuit_on_ideal_state():
     psi = np.array([np.sqrt(0.5), np.sqrt(0.3), np.sqrt(0.2)])
     rho = _embed_pure(psi, n_cav=6)
-    hog, xeb, fid = eval_circuit(rho, psi, d=3, num_modes=1, N_cav=6)
+    m = eval_circuit(rho, psi, d=3, num_modes=1, N_cav=6)
     q = np.abs(psi) ** 2
-    assert fid == pytest.approx(1.0)
-    assert xeb == pytest.approx(1.0)
-    assert hog == pytest.approx(compute_hog(q, q))
+    assert m.fid == pytest.approx(1.0)
+    assert m.xeb == pytest.approx(1.0)
+    assert m.hog == pytest.approx(compute_hog(q, q))
