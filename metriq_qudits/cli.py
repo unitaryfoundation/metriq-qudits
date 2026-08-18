@@ -1,14 +1,8 @@
 """Command-line interface for the metriq-qudits benchmarks.
 
-Examples:
+Example:
     # Run a benchmark config against the default ideal (noiseless) device
     metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json
-
-    # Run against a simulated device with a T1/T2 sweep, with parallel execution across unitaries/circuits
-    metriq-qudits my_qv.json --device metriq_qudits/schemas/examples/coherence_sweep.device.json --n-jobs 8
-
-    # Force a fresh run, ignoring cached outputs
-    metriq-qudits my_qv.json --overwrite --output-dir /tmp/run
 """
 
 from __future__ import annotations
