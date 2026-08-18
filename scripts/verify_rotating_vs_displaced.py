@@ -16,8 +16,8 @@ sys.path.insert(0, str(REPO_ROOT))
 import numpy as np
 import qutip as qt
 
+from metriq_qudits.pulses.drive_envelopes import CavityMode, TransmonAncilla
 from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
-from metriq_qudits.pulses.build import make_ancilla, make_modes
 from metriq_qudits.simulation.displaced_frame import DisplacedFrameSimulator
 from metriq_qudits.simulation.rotating_frame import RotatingFrameSimulator
 
@@ -54,7 +54,7 @@ def _build_pulse(layers, seed, alpha_cd):
     betas = (rng.normal(size=(layers, 1)) + 1j * rng.normal(size=(layers, 1))) * 0.9
     rotations = np.column_stack([rng.uniform(0, np.pi, layers + 1),
                                  rng.uniform(0, 2 * np.pi, layers + 1)])
-    compiler = ECDPulseBuilder(make_modes(1), make_ancilla())
+    compiler = ECDPulseBuilder([CavityMode()], TransmonAncilla())
     return compiler.compile_circuit(betas, rotations, peak_amplitude=alpha_cd,
                                     correct_cavity_phases=True)
 
@@ -75,7 +75,7 @@ def _truncated(cavity, m):
 
 def main(argv=None) -> int:
     args = _parse_args(argv)
-    mode = make_modes(1)[0]
+    mode = CavityMode()
 
     pulse = _build_pulse(args.layers, args.seed, args.alpha_cd)
     epsilon = pulse.cavity_drives[0]

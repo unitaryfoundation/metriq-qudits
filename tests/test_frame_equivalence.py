@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import qutip as qt
 
-from metriq_qudits.pulses.build import make_modes
+from metriq_qudits.pulses.drive_envelopes import CavityMode
 from metriq_qudits.simulation.displaced_frame import DisplacedFrameSimulator
 from metriq_qudits.simulation.rotating_frame import RotatingFrameSimulator
 
@@ -42,7 +42,7 @@ def _renormalized_block(cavity, m):
     "omega, epsilon", [(p[1], p[2]) for p in _PULSES], ids=[p[0] for p in _PULSES],
 )
 def test_displaced_and_rotating_frames_agree(omega, epsilon):
-    mode = make_modes(1)[0]
+    mode = CavityMode()
     disp = _final_cavity(
         DisplacedFrameSimulator(cavity_dim=N_DISP, mode=mode, qubit_dim=3),
         epsilon, omega,
@@ -68,7 +68,7 @@ def test_static_hamiltonians_match_across_frames():
     # The two frames inline their Hamiltonian coefficients independently, but the
     # drive-independent (alpha = 0) part must be identical. Guards the two copies
     # against drifting apart.
-    mode = make_modes(1)[0]
+    mode = CavityMode()
     disp = DisplacedFrameSimulator(cavity_dim=N_DISP, mode=mode, qubit_dim=3)
     rot = RotatingFrameSimulator(cavity_dim=N_DISP, mode=mode, qubit_dim=3)
     assert (disp._static_hamiltonian() - rot._static_hamiltonian()).norm() < 1e-12

@@ -21,11 +21,10 @@ def _pulse(length, phase, peaks):
 
 def test_roundtrip_preserves_variable_length_pulses(tmp_path):
     pulses = [_pulse(5, 0.1, (3.0,)), _pulse(8, 0.2, (5.0, 2.0))]
-    metadata = {"num_modes": 1, "d": 4, "N_cav": 20}
-    path = str(tmp_path / "pulses.npz")
+    paths = [tmp_path / f"{i:04d}.npz" for i in range(len(pulses))]
 
-    save_pulses(path, pulses, metadata)
-    loaded, loaded_meta = load_pulses(path)
+    save_pulses(paths, pulses)
+    loaded = load_pulses(paths)
 
     assert len(loaded) == 2
     for orig, got in zip(pulses, loaded):
@@ -35,18 +34,14 @@ def test_roundtrip_preserves_variable_length_pulses(tmp_path):
         np.testing.assert_allclose(got.final_cavity_phases, orig.final_cavity_phases)
         assert got.peak_displacement == pytest.approx(orig.peak_displacement)
 
-    assert loaded_meta["num_modes"] == 1
-    assert loaded_meta["d"] == 4
-    assert loaded_meta["N_unitaries"] == 2
 
-
-def test_only_circuit_level_peak_is_persisted(tmp_path):
-    # save/load keeps a single per-circuit maximum; the per-gate tuple is lossy
+def test_peak_displacements_roundtrip(tmp_path):
+    # the full per-gate peak tuple is preserved; peak_displacement is its maximum
     pulse = _pulse(6, 0.0, (5.0, 2.0, 4.0))
-    path = str(tmp_path / "p.npz")
+    path = tmp_path / "0000.npz"
 
-    save_pulses(path, [pulse], {"num_modes": 1})
-    (got,), _ = load_pulses(path)
+    save_pulses([path], [pulse])
+    (got,) = load_pulses([path])
 
+    assert got.peak_displacements == (5.0, 2.0, 4.0)
     assert got.peak_displacement == pytest.approx(5.0)
-    assert got.peak_displacements == (5.0,)
