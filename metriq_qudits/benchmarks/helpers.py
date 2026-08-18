@@ -1,6 +1,8 @@
 """
-Pure, benchmark-agnostic pipeline stages: pulse building, simulation, and score
-aggregation. Object in, object out, with no run directories or benchmark parameters.
+benchmark-agnostic helper functions for:
+    1. Compilation
+    2. Pulse building
+    3. Simulation
 """
 
 from __future__ import annotations
