@@ -34,10 +34,7 @@ N_JOBS = int(os.environ.get("N_JOBS", "1"))
 
 def compile_circuit(unitary: np.ndarray, *, d: int, n_cavity: int, k_init: int,
                     k_max: int, optimizer_config: OptimizerConfig) -> CompiledCircuit | None:
-    """Compile one target to the shallowest converging ECD circuit, or None.
-
-    Pure: the truncation and depth window are supplied by the caller (the benchmark's
-    compile policy), so nothing here is benchmark-specific."""
+    """Compile one target to the shallowest converging ECD circuit, or None if fails to converge."""
     finder = ECDParameterFinder(d=d, num_modes=1, config=optimizer_config)
     return finder.find_parameters_adaptive_k(
         unitary, k_init=k_init, k_max=k_max, N=n_cavity,
@@ -48,7 +45,7 @@ def compile_circuit(unitary: np.ndarray, *, d: int, n_cavity: int, k_init: int,
 def compile_circuits(unitaries: list[np.ndarray], *, d: int, n_cavity: int,
                      k_init: int, k_max: int, optimizer_config: OptimizerConfig,
                      n_jobs: int = N_JOBS) -> list[CompiledCircuit | None]:
-    """Compile the whole ensemble in parallel. Order preserved."""
+    """Parallel compilation across circuits."""
     worker = partial(compile_circuit, d=d, n_cavity=n_cavity, k_init=k_init,
                      k_max=k_max, optimizer_config=optimizer_config)
     return list(parallel_map(worker, unitaries, n_jobs))
@@ -63,7 +60,7 @@ PEAK_DISPLACEMENT = 10.0
 def build_circuit_pulse(circuit: CompiledCircuit | None, *,
                         peak_displacement: float = PEAK_DISPLACEMENT,
                         correct_phases: bool = True) -> CircuitWaveforms | None:
-    """Build one circuit's physical waveforms. Pure: object in, object out."""
+    """Build one circuit's physical waveforms."""
     if circuit is None:
         return None
     builder = ECDPulseBuilder([CavityMode()], TransmonAncilla())
@@ -79,7 +76,7 @@ def build_circuit_pulses(circuits: list[CompiledCircuit | None], *,
                          peak_displacement: float = PEAK_DISPLACEMENT,
                          correct_phases: bool = True,
                          n_jobs: int = N_JOBS) -> list[CircuitWaveforms | None]:
-    """Build waveforms for the whole ensemble in parallel. Order preserved."""
+    """Build waveforms for the whole ensemble in parallel."""
     worker = partial(build_circuit_pulse, peak_displacement=peak_displacement,
                      correct_phases=correct_phases)
     return list(parallel_map(worker, circuits, n_jobs))
@@ -117,7 +114,7 @@ def simulate_circuit(pulse: CircuitWaveforms | None, *, n_cavity: int,
 def simulate_circuits(pulses, *, n_cavity: int, backend: str = "dynamiqs",
                       t1_us: float | None = None, t2_us: float | None = None,
                       n_jobs: int = N_JOBS) -> list[np.ndarray | None]:
-    """Simulate the ensemble in parallel. Order preserved (None where a pulse is missing)."""
+    """Simulate the ensemble in parallel."""
     worker = partial(simulate_circuit, n_cavity=n_cavity, backend=backend,
                      t1_us=t1_us, t2_us=t2_us)
     return list(parallel_map(worker, pulses, n_jobs))

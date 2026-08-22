@@ -24,10 +24,9 @@ from metriq_qudits.compilation.gates import _ladder_ops, _embed_cavity, _ecd, _r
 from metriq_qudits.compilation.circuit_io import CompiledCircuit
 from metriq_qudits.paths import output_dir
 
-# Persistent XLA compilation cache. Compile workers are spawned as fresh
-# processes that would otherwise each re-JIT the same (k, N) graphs; a shared
-# on-disk cache compiles each graph once and reuses it across circuits, workers,
-# and repeated runs. The results are unaffected — only compile latency.
+# Persistent XLA compilation cache. Allows for the same JIT to be leveraged
+# by other circuit compilations for a given (k, N) configuration, where
+# k is the depth of the circuit and N is the total dimension size (computational + buffer).
 _JAX_CACHE_DIR = output_dir() / "jax_cache"
 os.makedirs(_JAX_CACHE_DIR, exist_ok=True)
 jax.config.update("jax_compilation_cache_dir", str(_JAX_CACHE_DIR))
@@ -58,12 +57,7 @@ def run_circuit(betas, rotations, N: int, n_penalize: int = 0):
       penalty          — accumulated exp-weighted population of the top
                          n_penalize Fock levels after each ECD
       max_boundary_pop — max top-Fock-level population reached after any ECD
-                         (the boundary-leakage diagnostic)
-
-    The k layers are executed with jax.lax.scan (rather than a Python loop) so
-    the compiled graph is one layer body regardless of depth. The num_modes
-    inner loop stays unrolled.
-    """
+                         (the boundary-leakage diagnostic)"""
     k, num_modes = betas.shape
     a, adag      = _ladder_ops(N)
     dim_cav      = N ** num_modes
@@ -73,8 +67,7 @@ def run_circuit(betas, rotations, N: int, n_penalize: int = 0):
     psi = jnp.zeros(2 * dim_cav, dtype=jnp.complex128).at[dim_cav].set(1.0)
     psi = jnp.kron(_rotation_matrix(rotations[0, 0], rotations[0, 1]), I_cav) @ psi
 
-    # betas is already (k, num_modes). The in-loop rotations (all but the leading
-    # one) group per layer as (k, num_modes, 2). scan slices the leading axis.
+    # rotations[1:] regrouped per layer (k, num_modes, 2) so scan slices it in step with betas.
     layer_rotations = rotations[1:].reshape(k, num_modes, 2)
 
     def layer_step(carry, layer_inputs):

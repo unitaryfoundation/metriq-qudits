@@ -20,12 +20,7 @@ class BenchmarkResult(BaseModel):
 
 
 class Benchmark:
-    """Runs the staged, existence-cached local pipeline for one benchmark.
-
-    Concrete benchmarks supply four hooks (sample_targets, calibrate, compile,
-    score); the base owns the compile -> build -> simulate -> score orchestration,
-    the artifact layout, and the T1/T2 sweep. A run pairs a config (one qudit
-    dimension) with a device (backend and noise grid)."""
+    """Runs the local pipeline for one benchmark."""
 
     result_cls: type[BenchmarkResult]
 
@@ -33,12 +28,11 @@ class Benchmark:
         self.args = args
         self.params = params
 
-    # Hooks implemented by concrete benchmarks.
+    # Instantiated by concrete benchmarks (e.g. quantum volume).
     def sample_targets(self, config: SystemConfig):
         raise NotImplementedError
 
     def calibrate(self, config: SystemConfig):
-        """Return the compile/simulate policy. Must expose a .n_cavity truncation."""
         raise NotImplementedError
 
     def compile(self, config: SystemConfig, targets, cal):
@@ -67,7 +61,7 @@ class Benchmark:
         pulse_paths = [pulses_dir / f"{i:04d}.npz" for i in range(n_unitaries)]
 
         # Compile stage: compile the ensemble, then save every circuit.
-        # Overwrite gate: run when forced or missing, otherwise reuse what is on disk.
+        # Overwrite gate: run when forced (i.e. --overwrite True) or missing, otherwise reuse what is on disk.
         if overwrite or not all(path.exists() for path in circuit_paths):
             targets = self.sample_targets(config)
             circuits = self.compile(config, targets, cal)
@@ -100,7 +94,7 @@ class Benchmark:
               f"XEB={result.xeb_normalized:.4f}  F={result.fid_mean:.4f}")
 
         # Noise sweep: one aggregated file per (T1, T2) grid point, keeping T2 <= 2 T1.
-        # Empty grids (an ideal device) run the noiseless baseline only.
+        # When (T1, T2) grid is empty (an ideal device), run the noiseless baseline only.
         if device.t1_us and device.t2_us:
             sweep_dir = metrics_dir / "sweep"
             sweep_dir.mkdir(parents=True, exist_ok=True)

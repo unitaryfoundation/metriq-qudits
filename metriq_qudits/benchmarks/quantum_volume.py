@@ -36,9 +36,13 @@ class QVResult(BenchmarkResult):
 
     @property
     def xeb_normalized(self) -> float:
-        # Ratio of sums over the ensemble (Bornman et al. 2024, Eqs 17-18).
-        den = float(np.sum(self.xeb_den))
-        return float(np.sum(self.xeb_num) / den) if den > 1e-10 else 0.0
+        # Bornman et al. 2024, Eq 18: (D E[p.q] - 1) / (D E[q.q] - 1), averaging over
+        # the circuit ensemble separately in the numerator (Eq 17) and denominator.
+        if not self.xeb_den:
+            return 0.0
+        num = float(np.mean(self.xeb_num))  # D E[p.q] - 1
+        den = float(np.mean(self.xeb_den))  # D E[q.q] - 1
+        return num / den if den > 1e-10 else 0.0
 
     @property
     def fid_mean(self) -> float:

@@ -3,7 +3,7 @@ for GPU execution. It uses the same Hamiltonian, frame, and collapse operators a
 constructor and simulate()/to_physical_frame() interface. Time-dependent
 coefficients are linearly interpolated (the QuTiP version uses cubic splines).
 
-to_physical_frame returns a qutip.Qobj so downstream ptrace/metrics code is
+to_physical_frame returns a qutip.Qobj so subsequent ptrace/metrics code is
 backend-agnostic. Only the time evolution runs under JAX.
 """
 

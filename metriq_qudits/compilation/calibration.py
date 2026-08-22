@@ -82,7 +82,7 @@ def _calibrate_buffers(d, depth, targets, seed, penalty_weight, stability_th, n_
         n_penalize = _buffer_count_to_penalize(num_buffers)
         n_cavity = d + num_buffers
         # stability_th=None: accept the best converged candidate, then measure its
-        # stability at N + n_test_extra ourselves below.
+        # stability at N + n_test_extra Fock levels.
         cfg = OptimizerConfig(n_penalize=n_penalize, penalty_weight=penalty_weight,
                               stability_th=None, n_test_extra=N_TEST_EXTRA)
         jobs = [CompileJob(d=d, num_modes=1, config=cfg, target=targets[i],
