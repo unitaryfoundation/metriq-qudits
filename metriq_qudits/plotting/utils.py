@@ -6,7 +6,7 @@ Two groups of functions:
   Wigner sanity checks), used by the optional ``diagnostics_dir`` hooks in the
   pulse and simulation stages.
 - *Results* plots built after a run from the cached ``outputs/*`` NPZ files,
-  driven by ``scripts/plot_results.py``.
+  driven by ``metriq_qudits.plotting.results``.
 """
 
 from __future__ import annotations
