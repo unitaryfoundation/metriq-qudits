@@ -51,13 +51,11 @@ Like [metriq-gym](https://github.com/unitaryfoundation/metriq-gym), `metriq-qudi
 
 ### Quickstart
 
-You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an (ideal) backend simulator:
+You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an (ideal) backend simulator, simply use a benchmakr config (`--device` defaults to the noisless ideal backend):
 
 ```bash
 metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json
 ```
-
-When `--device` is omitted, the benchmark runs against a noiseless ideal device.
 
 To run the same experiment with a noise sweep, pass a device config that defines
 a T1/T2 grid:
@@ -67,7 +65,7 @@ metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json \
     --device metriq_qudits/schemas/examples/coherence_sweep.device.json
 ```
 
-Other cli arguments that the user can provide include:
+For the full list of options, run `metriq-qudits --help`. Some of the cli arguments that the user can provide include:
 
 | Argument | Description |
 | --- | --- |
@@ -77,8 +75,7 @@ Other cli arguments that the user can provide include:
 | `--output-dir PATH` | Artifact root. Defaults to `METRIQ_QUDITS_OUTPUT_DIR` or `./outputs`. |
 
 
-For the full list of options, run `metriq-qudits --help`.
-
+#### Outputs folder
 Generated artifacts are written to a visible `outputs/` directory, one subtree
 per benchmark and qudit dimension:
 
