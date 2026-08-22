@@ -115,8 +115,10 @@ stages:
    simulator are implemented in
    [`simulation/displaced_frame.py`](metriq_qudits/simulation/displaced_frame.py).
 
+<br>
+
 <p align="center">
-  <img src="docs/pipeline_flow.svg" alt="Pipeline: calibrate feeds compile, then build pulses, simulate, and score" width="100%">
+  <img src="docs/pipeline_flow.svg" alt="Pipeline: compile, then build pulses, then simulate" width="100%">
 </p>
 
 
