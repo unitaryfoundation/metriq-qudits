@@ -47,11 +47,11 @@ Requires Python 3.12 or 3.13.
 
 ## Running the pipeline
 
-Like [metriq-gym](https://github.com/unitaryfoundation/metriq-gym), `metriq-qudits` takes a JSON configuration file as input. The user provides 1) a benchmark config and 2) an optional device config, then the full pipeline runs:  compilation → pulse building → execution. Examples of both types of config files are in [`metriq_qudits/schemas/examples/`](metriq_qudits/schemas/examples/).
+Like [metriq-gym](https://github.com/unitaryfoundation/metriq-gym), `metriq-qudits` takes JSON configuration files as input. The user provides 1) a benchmark config and 2) an optional device config, then the full pipeline runs:  compilation → pulse building → execution. Examples of both types of config files are in [`metriq_qudits/schemas/examples/`](metriq_qudits/schemas/examples/).
 
 ### Quickstart
 
-You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an (ideal) backend simulator, simply use a benchmakr config (`--device` defaults to the noisless ideal backend):
+You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an (ideal) backend simulator, simply use a benchmark config (`--device` defaults to the noisless ideal backend):
 
 ```bash
 metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json
@@ -65,17 +65,10 @@ metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json \
     --device metriq_qudits/schemas/examples/coherence_sweep.device.json
 ```
 
-For the full list of options, run `metriq-qudits --help`. Some of the cli arguments that the user can provide include:
-
-| Argument | Description |
-| --- | --- |
-| `--device PATH` | Simulated-device config JSON. Defaults to an ideal (noiseless) device. |
-| `--n-jobs N` | Number of parallel worker processes. |
-| `--overwrite` | Ignore saved artifacts and rerun every stage. |
-| `--output-dir PATH` | Artifact root. Defaults to `METRIQ_QUDITS_OUTPUT_DIR` or `./outputs`. |
+For the full list of cli options, run `metriq-qudits --help`.
 
 
-#### Outputs folder
+### Outputs folder
 Generated artifacts are written to a visible `outputs/` directory, one subtree
 per benchmark and qudit dimension:
 
@@ -90,7 +83,7 @@ outputs/
         └── sweep/          # one .npz per T1/T2 grid point
 ```
 
-Each stage checks the saved results before running, so a rerun reuses artifacts already on disk
+Each stage checks the saved results before running, so a rerun reuses saved artifacts
 unless you pass `--overwrite`.
 
 
@@ -114,7 +107,19 @@ stages:
    simulator are implemented in
    [`simulation/displaced_frame.py`](metriq_qudits/simulation/displaced_frame.py).
 
-![Pipeline](docs/pipeline_flow.png)
+```mermaid
+flowchart LR
+    cal([Calibrate<br/>cached]):::cstep --> comp[Compile]:::step1
+    comp --> pulse[Build pulses]:::step2
+    pulse --> sim[Simulate]:::step3
+    sim --> res[Results<br/>HOG · XEB · fidelity]:::out
+
+    classDef cstep fill:#f2f2f2,stroke:#8C8C8C,stroke-width:1.5px,color:#000;
+    classDef step1 fill:#e9eff7,stroke:#4C72B0,stroke-width:1.5px,color:#000;
+    classDef step2 fill:#eaf2ec,stroke:#55A868,stroke-width:1.5px,color:#000;
+    classDef step3 fill:#f0edf5,stroke:#8172B3,stroke-width:1.5px,color:#000;
+    classDef out fill:#ffffff,stroke:#555555,stroke-width:1.5px,color:#000;
+```
 
 
 #### Plotting
