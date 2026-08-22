@@ -116,7 +116,7 @@ class Benchmark:
                                                backend=device.backend,
                                                t1_us=t1_us, t2_us=t2_us, n_jobs=n_jobs)
                     point = self.score(config, states, targets, cal)
-                    save_result(point_path, point)
+                    save_result(point_path, point, t1_us=t1_us, t2_us=t2_us)
                     print(f"  [sweep] T1={t1_us:.0f}us T2={t2_us:.0f}us  "
                           f"HOG={point.hog_mean:.3f}  XEB={point.xeb_normalized:.3f}  "
                           f"F={point.fid_mean:.3f}")

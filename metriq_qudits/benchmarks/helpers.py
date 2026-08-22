@@ -123,13 +123,16 @@ def simulate_circuits(pulses, *, n_cavity: int, backend: str = "dynamiqs",
     return list(parallel_map(worker, pulses, n_jobs))
 
 
-def save_result(path, result) -> None:
+def save_result(path, result, **extra) -> None:
     """Persist a benchmark result's metric fields to an npz."""
-    np.savez(str(path), **{key: np.asarray(value)
-                           for key, value in result.model_dump().items()})
+    arrays = {key: np.asarray(value) for key, value in result.model_dump().items()}
+    arrays.update({key: np.asarray(value) for key, value in extra.items()})
+    np.savez(str(path), **arrays)
 
 
 def load_result(path, result_cls):
     """Load a benchmark result of the given type from an npz."""
+    fields = result_cls.model_fields
     with np.load(str(path)) as data:
-        return result_cls(**{key: data[key].tolist() for key in data.files})
+        return result_cls(**{key: data[key].tolist()
+                             for key in data.files if key in fields})
