@@ -1,5 +1,6 @@
-% ECD--QV pipeline flow diagram (standalone figure).
-% Build: tectonic docs/pipeline_flow.tex   (or pdflatex docs/pipeline_flow.tex)
+% metriq-qudits pipeline flow diagram (standalone figure).
+% Build: tectonic docs/pipeline_flow.tex
+%        pdf2svg docs/pipeline_flow.pdf docs/pipeline_flow.svg
 \documentclass[border=8pt]{standalone}
 
 \usepackage{tikz}
@@ -7,65 +8,46 @@
 \usepackage{amssymb}
 \usetikzlibrary{arrows.meta, positioning}
 
-\newcommand{\Nunitaries}{N}
-
 \definecolor{cGray}{HTML}{8C8C8C}
 \definecolor{cBlue}{HTML}{4C72B0}
 \definecolor{cGreen}{HTML}{55A868}
 \definecolor{cPurple}{HTML}{8172B3}
+\definecolor{cSlate}{HTML}{555555}
 
 \begin{document}
 \begin{tikzpicture}[
     box/.style={
-        draw, rectangle, rounded corners=4pt,
-        minimum width=7.2cm, minimum height=1.7cm,
-        align=center, font=\large,
-        line width=1.4pt
+        draw, rounded corners=4pt, align=center,
+        minimum height=1.8cm, text width=3.7cm,
+        line width=1.2pt, font=\small
     },
     prep/.style={
-        draw=cGray, fill=cGray!8, dashed, rectangle, rounded corners=4pt,
-        minimum width=7.2cm, minimum height=1.1cm,
-        align=center, font=\small,
-        line width=1.0pt
+        draw=cGray, fill=cGray!8, dashed, rounded corners=4pt, align=center,
+        minimum height=1.0cm, text width=2.6cm, line width=1.0pt, font=\small
     },
-    arrow/.style={
-        ->, -{Stealth[length=8pt]},
-        line width=1.4pt
-    },
-    lbl/.style={font=\small, align=center, text width=4.4cm}
+    arrow/.style={-{Stealth[length=7pt]}, line width=1.2pt, draw=cSlate},
+    elbl/.style={font=\small, midway, above=1pt}
 ]
 
-\node[prep] (calib) {
-    Fock-buffer calibration \emph{(cached)} \\[1pt]
-    depth probe
-};
+\node[box, draw=cBlue, fill=cBlue!10] (comp)
+    {\textbf{Compile}\\[2pt]{\ttfamily\scriptsize ECDParameterFinder}\\[2pt]\footnotesize Haar Unitaries to ECD circuits};
+\node[box, draw=cGreen, fill=cGreen!10, right=4.2cm of comp] (pulse)
+    {\textbf{Build pulses}\\[2pt]{\ttfamily\scriptsize ECDPulseBuilder}\\[2pt]\footnotesize control waveforms};
+\node[box, draw=cPurple, fill=cPurple!10, right=3.4cm of pulse] (sim)
+    {\textbf{Simulate}\\[2pt]{\ttfamily\scriptsize DisplacedFrameSimulator}\\[2pt]\footnotesize noiseless + T1/T2 sweep};
+\node[box, draw=cSlate, fill=white, right=3.0cm of sim] (score)
+    {\textbf{Score}\\[2pt]\footnotesize HOG $\cdot$ XEB $\cdot$ Fidelity};
 
-\node[box, draw=cBlue, fill=cBlue!10, below=1.4cm of calib] (gate) {
-    Gate Parameter Optimizer \\[3pt]
-    \small\texttt{ECDParameterFinder} $\cdot$ L-BFGS (restart) / Adam \\[-1pt]
-    \small \Nunitaries\ Haar targets $\cdot$ ideal ECD model
-};
+\node[prep, above=1.1cm of comp] (calib) {Calibrate \emph{(cached)}};
 
-\node[box, draw=cGreen, fill=cGreen!10, below=2.4cm of gate] (pulse) {
-    Pulse Builder \\[3pt]
-    \small\texttt{ECDPulseBuilder} $\cdot$ solve $\alpha(t)$ ODE \\[-1pt]
-    \small virtual-Z correction $\cdot$ Kerr/$\chi'$ correction
-};
-
-\node[box, draw=cPurple, fill=cPurple!10, below=2.4cm of pulse] (sim) {
-    Displaced Frame Simulation \\[3pt]
-    \small\texttt{DisplacedFrameSimulator} $\cdot$ dynamiqs (default) / QuTiP \\[-1pt]
-    \small T1/T2 noise sweep $\cdot$ HOG \& XEB metrics
-};
-
-\draw[arrow, draw=cBlue] (calib.south) -- (gate.north)
-    node[midway, right=0.3cm, lbl] {$N_{\mathrm{cav}}$, $k_{\mathrm{start}}$};
-
-\draw[arrow, draw=cGreen] (gate.south) -- (pulse.north)
-    node[midway, right=0.3cm, lbl] {$\{\beta_j,\,\theta_j\}$ per ECD layer};
-
-\draw[arrow, draw=cPurple] (pulse.south) -- (sim.north)
-    node[midway, right=0.3cm, lbl] {$\varepsilon(t)$, $\omega(t)$ waveforms};
+\draw[arrow] (calib) -- (comp)
+    node[midway, right=2pt, font=\small] {$N_{\mathrm{cav}},\,k_{\mathrm{start}}$};
+\draw[arrow] (comp) -- (pulse)
+    node[elbl] {$\{\beta_j,\theta_j\}$ per ECD layer};
+\draw[arrow] (pulse) -- (sim)
+    node[elbl] {$\varepsilon(t),\,\omega(t)$ waveforms};
+\draw[arrow] (sim) -- (score)
+    node[elbl] {final states $\rho$};
 
 \end{tikzpicture}
 \end{document}
