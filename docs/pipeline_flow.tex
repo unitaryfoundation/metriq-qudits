@@ -8,7 +8,6 @@
 \usepackage{amssymb}
 \usetikzlibrary{arrows.meta, positioning}
 
-\definecolor{cGray}{HTML}{8C8C8C}
 \definecolor{cBlue}{HTML}{4C72B0}
 \definecolor{cGreen}{HTML}{55A868}
 \definecolor{cPurple}{HTML}{8172B3}
@@ -17,37 +16,25 @@
 \begin{document}
 \begin{tikzpicture}[
     box/.style={
-        draw, rounded corners=4pt, align=center,
-        minimum height=1.8cm, text width=3.7cm,
-        line width=1.2pt, font=\small
+        draw, rounded corners=5pt, align=center,
+        minimum height=2.5cm, text width=4.7cm,
+        line width=1.4pt, font=\normalsize
     },
-    prep/.style={
-        draw=cGray, fill=cGray!8, dashed, rounded corners=4pt, align=center,
-        minimum height=1.0cm, text width=2.6cm, line width=1.0pt, font=\small
-    },
-    arrow/.style={-{Stealth[length=7pt]}, line width=1.2pt, draw=cSlate},
-    elbl/.style={font=\small, midway, above=1pt}
+    arrow/.style={-{Stealth[length=9pt]}, line width=1.4pt, draw=cSlate},
+    elbl/.style={midway, above=3pt, align=center, font=\normalsize}
 ]
 
 \node[box, draw=cBlue, fill=cBlue!10] (comp)
-    {\textbf{Compile}\\[2pt]{\ttfamily\scriptsize ECDParameterFinder}\\[2pt]\footnotesize Haar Unitaries to ECD circuits};
-\node[box, draw=cGreen, fill=cGreen!10, right=4.2cm of comp] (pulse)
-    {\textbf{Build pulses}\\[2pt]{\ttfamily\scriptsize ECDPulseBuilder}\\[2pt]\footnotesize control waveforms};
-\node[box, draw=cPurple, fill=cPurple!10, right=3.4cm of pulse] (sim)
-    {\textbf{Simulate}\\[2pt]{\ttfamily\scriptsize DisplacedFrameSimulator}\\[2pt]\footnotesize noiseless + T1/T2 sweep};
-\node[box, draw=cSlate, fill=white, below=1.1cm of sim] (score)
-    {\textbf{Score}\\[2pt]\footnotesize HOG $\cdot$ XEB $\cdot$ Fidelity};
+    {\large\textbf{Compile}\\[5pt]{\ttfamily\small ECDParameterFinder}\\[5pt]Haar Unitaries to ECD circuits};
+\node[box, draw=cGreen, fill=cGreen!10, right=3.0cm of comp] (pulse)
+    {\large\textbf{Build pulses}\\[5pt]{\ttfamily\small ECDPulseBuilder}\\[5pt]control waveforms};
+\node[box, draw=cPurple, fill=cPurple!10, right=3.0cm of pulse] (sim)
+    {\large\textbf{Simulate}\\[5pt]{\ttfamily\small DisplacedFrameSimulator}\\[5pt]noiseless + T1/T2 sweep};
 
-\node[prep, above=1.1cm of comp] (calib) {Calibrate \emph{(cached)}};
-
-\draw[arrow] (calib) -- (comp)
-    node[midway, right=2pt, font=\small] {$N_{\mathrm{cav}},\,k_{\mathrm{start}}$};
 \draw[arrow] (comp) -- (pulse)
-    node[elbl] {$\{\beta_j,\theta_j\}$ per ECD layer};
+    node[elbl] {$\{\beta_j,\theta_j\}$\\per ECD layer};
 \draw[arrow] (pulse) -- (sim)
-    node[elbl] {$\varepsilon(t),\,\omega(t)$ waveforms};
-\draw[arrow] (sim) -- (score)
-    node[midway, right=2pt, font=\small] {final states $\rho$};
+    node[elbl] {$\varepsilon(t),\,\omega(t)$\\waveforms};
 
 \end{tikzpicture}
 \end{document}

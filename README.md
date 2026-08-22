@@ -1,5 +1,9 @@
 # metriq-qudits
 
+[![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
+[![Metriq](https://img.shields.io/badge/Metriq-metriq.info-6f42c1)](https://metriq.info/)
+
 `metriq-qudits` is an open-source framework for benchmarking qudit systems,
 developed in parallel with the qubit benchmarks implemented in
 [metriq-gym](https://github.com/unitaryfoundation/metriq-gym). It complements
