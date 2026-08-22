@@ -51,7 +51,7 @@ Like [metriq-gym](https://github.com/unitaryfoundation/metriq-gym), `metriq-qudi
 
 ### Quickstart
 
-You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an (ideal) backend simulator, simply use a benchmark config (`--device` defaults to the noisless ideal backend):
+You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an (ideal) backend simulator, simply use a benchmark config (`--device` defaults to the noiseless ideal backend):
 
 ```bash
 metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json
@@ -65,8 +65,11 @@ metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json \
     --device metriq_qudits/schemas/examples/coherence_sweep.device.json
 ```
 
-For the full list of cli options, run `metriq-qudits --help`.
+Once the benchmark finishes, plot the results using: 
 
+```bash
+python -m metriq_qudits.plotting.results
+```
 
 ### Outputs folder
 Generated artifacts are written to a visible `outputs/` directory, one subtree
@@ -85,6 +88,7 @@ outputs/
 
 Each stage checks the saved results before running, so a rerun reuses saved artifacts
 unless you pass `--overwrite`.
+
 
 
 ## Codebase overview
@@ -107,28 +111,10 @@ stages:
    simulator are implemented in
    [`simulation/displaced_frame.py`](metriq_qudits/simulation/displaced_frame.py).
 
-```mermaid
-flowchart LR
-    cal([Calibrate<br/>cached]):::cstep --> comp[Compile]:::step1
-    comp --> pulse[Build pulses]:::step2
-    pulse --> sim[Simulate]:::step3
-    sim --> res[Results<br/>HOG · XEB · fidelity]:::out
+<p align="center">
+  <img src="docs/pipeline_flow.svg" alt="Pipeline: calibrate feeds compile, then build pulses, simulate, and score" width="100%">
+</p>
 
-    classDef cstep fill:#f2f2f2,stroke:#8C8C8C,stroke-width:1.5px,color:#000;
-    classDef step1 fill:#e9eff7,stroke:#4C72B0,stroke-width:1.5px,color:#000;
-    classDef step2 fill:#eaf2ec,stroke:#55A868,stroke-width:1.5px,color:#000;
-    classDef step3 fill:#f0edf5,stroke:#8172B3,stroke-width:1.5px,color:#000;
-    classDef out fill:#ffffff,stroke:#555555,stroke-width:1.5px,color:#000;
-```
-
-
-#### Plotting
-
-After running the benchmark, plot the results using: 
-
-```bash
-python -m metriq_qudits.plotting.results
-```
 
 #### Calibration
 
