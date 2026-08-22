@@ -35,7 +35,7 @@
     {\textbf{Build pulses}\\[2pt]{\ttfamily\scriptsize ECDPulseBuilder}\\[2pt]\footnotesize control waveforms};
 \node[box, draw=cPurple, fill=cPurple!10, right=3.4cm of pulse] (sim)
     {\textbf{Simulate}\\[2pt]{\ttfamily\scriptsize DisplacedFrameSimulator}\\[2pt]\footnotesize noiseless + T1/T2 sweep};
-\node[box, draw=cSlate, fill=white, right=3.0cm of sim] (score)
+\node[box, draw=cSlate, fill=white, below=1.1cm of sim] (score)
     {\textbf{Score}\\[2pt]\footnotesize HOG $\cdot$ XEB $\cdot$ Fidelity};
 
 \node[prep, above=1.1cm of comp] (calib) {Calibrate \emph{(cached)}};
@@ -47,7 +47,7 @@
 \draw[arrow] (pulse) -- (sim)
     node[elbl] {$\varepsilon(t),\,\omega(t)$ waveforms};
 \draw[arrow] (sim) -- (score)
-    node[elbl] {final states $\rho$};
+    node[midway, right=2pt, font=\small] {final states $\rho$};
 
 \end{tikzpicture}
 \end{document}
