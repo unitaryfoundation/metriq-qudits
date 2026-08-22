@@ -99,8 +99,6 @@ unless you pass `--overwrite`.
 
 ## Codebase overview
 
-![Pipeline](docs/pipeline_flow.png)
-
 The command-line pipeline begins in
 [`metriq_qudits/cli.py`](metriq_qudits/cli.py), which runs the following
 stages:
@@ -118,6 +116,9 @@ stages:
    Runs the noiseless simulation and optional T1/T2 sweep. The physical model and
    simulator are implemented in
    [`simulation/displaced_frame.py`](metriq_qudits/simulation/displaced_frame.py).
+
+![Pipeline](docs/pipeline_flow.png)
+
 
 #### Plotting
 
