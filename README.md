@@ -47,13 +47,11 @@ Requires Python 3.12 or 3.13.
 
 ## Running the pipeline
 
-Similar to [metriq-gym](https://github.com/unitaryfoundation/metriq-gym), `metriq-qudits` takes a configuration file (instance of a schema) as input, then runs the full pipeline (compilation -> pulse building -> execution). Examples of configuration files are provided in [`metriq_qudits/schemas/examples/`](metriq_qudits/schemas/examples/), which contains both benchmark configs (e.g. `quantum_volume.example.json`) and device configs (`ideal.device.json`, `coherence_sweep.device.json`).
+Like [metriq-gym](https://github.com/unitaryfoundation/metriq-gym), `metriq-qudits` takes a JSON configuration file as input. The user provides 1) a benchmark config and 2) an optional device config, then the full pipeline runs:  compilation → pulse building → execution. Examples of both types of config files are in [`metriq_qudits/schemas/examples/`](metriq_qudits/schemas/examples/).
 
 ### Quickstart
 
-You can use the provided experiment config files to get started. 
-
-To run a quantum volume experiment using an (ideal) backend simulator:
+You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an (ideal) backend simulator:
 
 ```bash
 metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json
@@ -74,16 +72,10 @@ Other cli arguments that the user can provide include:
 | Argument | Description |
 | --- | --- |
 | `--device PATH` | Simulated-device config JSON. Defaults to an ideal (noiseless) device. |
-| `--n-jobs N` | Number of parallel worker processes. Defaults to the `N_JOBS` environment variable, or 1. |
-| `--overwrite` | Ignore cached artifacts and rerun every stage. |
+| `--n-jobs N` | Number of parallel worker processes. |
+| `--overwrite` | Ignore saved artifacts and rerun every stage. |
 | `--output-dir PATH` | Artifact root. Defaults to `METRIQ_QUDITS_OUTPUT_DIR` or `./outputs`. |
 
-Circuit compilation and pulse-level simulation are computationally expensive, so
-use `--n-jobs` to run independent circuits in parallel:
-
-```bash
-metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json --n-jobs 8
-```
 
 For the full list of options, run `metriq-qudits --help`.
 
@@ -101,15 +93,13 @@ outputs/
         └── sweep/          # one .npz per T1/T2 grid point
 ```
 
-Each stage is existence-cached, so a rerun reuses artifacts already on disk
+Each stage checks the saved results before running, so a rerun reuses artifacts already on disk
 unless you pass `--overwrite`.
 
-Choose a different artifact root with `--output-dir /path/to/outputs` or the
-`METRIQ_QUDITS_OUTPUT_DIR` environment variable.
 
 ## Codebase overview
 
-![ECD-QV pipeline](docs/pipeline_flow.png)
+![Pipeline](docs/pipeline_flow.png)
 
 The command-line pipeline begins in
 [`metriq_qudits/cli.py`](metriq_qudits/cli.py), which runs the following
@@ -131,17 +121,11 @@ stages:
 
 #### Plotting
 
-Plotting is a separate step, run after a benchmark has produced results:
+After running the benchmark, plot the results using: 
 
 ```bash
 python -m metriq_qudits.plotting.results
 ```
-
-[`plotting/results.py`](metriq_qudits/plotting/results.py) reads the cached
-artifacts under `outputs/runs/` and writes figures to
-`outputs/plots/<benchmark>/`, covering compile quality, Fock-buffer calibration,
-noiseless metrics versus dimension, and the T1/T2 noise sweep. Set
-`METRIQ_QUDITS_OUTPUT_DIR` to read from a non-default artifact root.
 
 #### Calibration
 
@@ -162,7 +146,7 @@ force a fresh calibration.
     set rather than the ECD-and-rotation gate set used here.
 - [Fast Universal Control of an Oscillator with Weak Dispersive Coupling to a Qubit](https://arxiv.org/abs/2111.06414)
   - The primary source for understanding ECD gates and the k-layer ansatz of
-    alternating rotation and ECD gates used here (Fig. 1). Table S1 supplies the
+    alternating rotation and ECD gates used here (Fig. 1). Table S1 serves as reference for the
     Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/drive_envelopes.py`.
 - [Crosstalk-Robust Quantum Control in Multimode Bosonic Systems](https://arxiv.org/abs/2403.00275)
   - The theory for the displaced-frame Hamiltonian (Eqs. B3–B5) and its Lindblad
