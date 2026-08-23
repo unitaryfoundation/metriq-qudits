@@ -10,44 +10,40 @@ developed in parallel with the qubit benchmarks implemented in
 the benchmarking ecosystem described in the
 [Metriq paper](https://arxiv.org/abs/2603.08680).
 
-Currently `metriq-qudits` implements the quantum volume benchmark, which lives under
+Currently `metriq-qudits` only runs (simulated) quantum volume experiements, which lives under
 [`metriq_qudits/benchmarks/`](metriq_qudits/benchmarks/). More benchmarks are
-planned and will be added to the benchmarks folder alongside quantum volume.
+planned and will be added to the benchmarks folder alongside quantum volume. 
+We also plan to add hardware backend execution (see the Harware Interface page in our wiki to learn more).
 
 
 ## Installation
 
-Requires Python 3.12 or 3.13.
+metriq-qudits requires Python 3.12 or 3.13. To get started, clone the repository and change to its directory:
 
-1. Clone the repository:
+```bash
+git clone https://github.com/unitaryfoundation/metriq-qudits.git
+cd metriq-qudits
+```
 
-   ```bash
-   git clone https://github.com/unitaryfoundation/metriq-qudits.git
-   cd metriq-qudits
-   ```
+From there, create and activate a virtual environment so the install stays isolated:
 
-2. Create and activate a virtual environment:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
+```
 
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
-   ```
+Now install the package. This pulls in the standard CPU build of JAX, so if you are on a GPU you should first follow the [JAX installation guide](https://docs.jax.dev/en/latest/installation.html) for your platform:
 
-3. Install the package. This pulls in the standard CPU build of JAX. GPU users
-   should first follow the
-   [JAX installation guide](https://docs.jax.dev/en/latest/installation.html)
-   for their platform.
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-   ```bash
-   python -m pip install --upgrade pip
-   python -m pip install -e .
-   ```
+Finally, confirm the command landed and view the available options:
 
-4. Confirm the command is installed and view the available options:
-
-   ```bash
-   metriq-qudits --help
-   ```
+```bash
+metriq-qudits --help
+```
 
 ## Running the pipeline
 
@@ -141,7 +137,7 @@ force a fresh calibration.
     set rather than the ECD-and-rotation gate set used here.
 - [Fast Universal Control of an Oscillator with Weak Dispersive Coupling to a Qubit](https://arxiv.org/abs/2111.06414)
   - The primary source for understanding ECD gates and the k-layer ansatz of
-    alternating rotation and ECD gates used here (Fig. 1). Table S1 serves as reference for the
+    alternating rotation and ECD gates (see Fig. 1). Table S1 serves as reference for the
     Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/drive_envelopes.py`.
 - [Crosstalk-Robust Quantum Control in Multimode Bosonic Systems](https://arxiv.org/abs/2403.00275)
   - The theory for the displaced-frame Hamiltonian (Eqs. B3–B5) and its Lindblad
