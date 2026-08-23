@@ -164,7 +164,8 @@ def plot_metrics_vs_dim(records, out_path: str) -> None:
     d = np.array([r["d"] for r in records])
     fig, ax = plt.subplots(figsize=(7, 5))
     for metric, marker in zip(METRICS, ("o", "s", "^")):
-        ax.plot(d, [r[metric] for r in records], marker + "-", label=metric.upper())
+        metric_label = "Fidelity" if metric == "fid" else metric.upper()
+        ax.plot(d, [r[metric] for r in records], marker + "-", label=metric_label)
     ax.set_xlabel("qudit dimension d")
     ax.set_ylabel("metric")
     ax.set_title("Noiseless benchmark metrics vs dimension")
@@ -180,10 +181,11 @@ def plot_metrics_vs_dim(records, out_path: str) -> None:
 def plot_compile_summary(compiled_path: str, out_path: str, err_th: float = 0.01) -> None:
     """Stage-1 compile quality for one config, from the compiled-circuits NPZ.
 
-    Four panels: per-circuit final infidelity and boundary leakage (both colored
-    by the accepted depth k), the |β| distribution across all circuits/layers
-    (the ECD amplitudes that drive pulse duration), and the batched-optimizer
-    convergence traces. Skips silently for an empty cache.
+    Three standard panels: per-circuit final infidelity and boundary leakage
+    (both colored by the accepted depth k), and the |β| distribution across all
+    circuits/layers. A fourth batched-optimizer convergence panel is included
+    only when the cache contains a compatible ``opt_trace``. Skips silently for
+    an empty cache.
     """
     data = np.load(compiled_path)
     err = data["err"]
@@ -204,8 +206,15 @@ def plot_compile_summary(compiled_path: str, out_path: str, err_th: float = 0.01
     k_color = {k: palette[i % len(palette)] for i, k in enumerate(k_values)}
     index = np.arange(n_circuits)
 
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8), constrained_layout=True)
-    ax_err, ax_leak, ax_beta, ax_conv = axes.flat
+    has_opt_trace = "opt_trace" in data.files and data["opt_trace"].size
+    if has_opt_trace:
+        fig, axes = plt.subplots(2, 2, figsize=(11, 8), constrained_layout=True)
+        ax_err, ax_leak, ax_beta, ax_conv = axes.flat
+    else:
+        fig, (ax_err, ax_leak, ax_beta) = plt.subplots(
+            1, 3, figsize=(15, 4.5), constrained_layout=True,
+        )
+        ax_conv = None
 
     for k in k_values:
         mask = k_per == k
@@ -234,7 +243,7 @@ def plot_compile_summary(compiled_path: str, out_path: str, err_th: float = 0.01
                       f"(median {np.median(beta_mags):.2f})")
     ax_beta.grid(True, alpha=0.3)
 
-    if "opt_trace" in data.files and data["opt_trace"].size:
+    if has_opt_trace:
         stride = int(data["trace_stride"]) if "trace_stride" in data.files else 1
         for i, row in enumerate(data["opt_trace"]):
             trace = np.exp(row[~np.isnan(row)])  # stored log-objective -> objective
@@ -245,14 +254,9 @@ def plot_compile_summary(compiled_path: str, out_path: str, err_th: float = 0.01
         ax_conv.set_ylabel("batch-best objective")
         ax_conv.set_title("optimizer convergence")
         ax_conv.grid(True, which="both", alpha=0.3)
-    else:
-        ax_conv.text(0.5, 0.5, "no opt_trace in cache\n(recompile with --overwrite)",
-                     ha="center", va="center", fontsize=9, color="dimgray")
-        ax_conv.set_axis_off()
 
     survived = f"{n_circuits}/{n_attempted}" if n_attempted else str(n_circuits)
-    fig.suptitle(f"compile quality  ({os.path.basename(compiled_path)})  "
-                 f"circuits: {survived}", fontsize=11)
+    fig.suptitle(f"Haar-random circuits: {survived}", fontsize=11)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
@@ -289,7 +293,7 @@ def plot_min_depth_curve(compiled_path: str, out_path: str, err_th: float = 0.01
     ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=8)
-    ax.set_title(f"minimum-depth sweep  ({os.path.basename(compiled_path)})")
+    ax.set_title("minimum-depth sweep")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)
@@ -357,15 +361,14 @@ def plot_stability_calibration(cal_path: str, out_path: str) -> None:
                        label=f"threshold {stab_th:.0e}")
     ax_summary.axvline(best_buffers, color="tab:green", ls=":", lw=1.5,
                        label=f"chosen: {best_buffers} buf")
-    ax_summary.set_xlabel("num_buffers")
+    ax_summary.set_xlabel("number of buffer states")
     ax_summary.set_ylabel("max stability infidelity")
     ax_summary.set_title("calibration summary")
     ax_summary.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
     ax_summary.grid(True, which="both", alpha=0.3)
     ax_summary.legend(fontsize=8)
 
-    fig.suptitle(f"Fock-buffer calibration  d={d}  k={depth}  "
-                 f"({os.path.basename(cal_path)})", fontsize=11)
+    fig.suptitle(f"Fock-buffer calibration  d={d}  num layers k={depth}", fontsize=11)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path, dpi=120)
     plt.close(fig)
@@ -552,7 +555,8 @@ def plot_noise_heatmaps(record, out_path: str) -> None:
                        extent=[T1[0], T1[-1], T2[0], T2[-1]])
         ax.set_xlabel("T1 [µs]")
         ax.set_ylabel("T2 [µs]")
-        ax.set_title(f"{metric.upper()}  (d={record['d']})")
+        metric_label = "Fidelity" if metric == "fid" else metric.upper()
+        ax.set_title(f"{metric_label}  (d={record['d']})")
         fig.colorbar(im, ax=ax, shrink=0.85)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.tight_layout()
