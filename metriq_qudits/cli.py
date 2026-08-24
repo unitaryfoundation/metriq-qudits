@@ -1,6 +1,6 @@
 """Command-line interface for the metriq-qudits benchmarks.
 
-Example:
+Example use case:
     # Run a benchmark config against the default ideal (noiseless) device
     metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json
 """

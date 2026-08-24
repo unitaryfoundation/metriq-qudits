@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "metriq-qudits/simulator_device.schema.json",
   "title": "simulator_device",
-  "description": "A simulated device: the numerical backend and the T1/T2 coherence grid to characterize a benchmark against. Empty grids mean the noiseless baseline only.",
+  "description": "A simulated device: the numerical backend and the T1/T2 coherence grid to characterize a benchmark against. Empty grids mean only the noiseless baseline executes.",
   "type": "object",
   "properties": {
     "name": {

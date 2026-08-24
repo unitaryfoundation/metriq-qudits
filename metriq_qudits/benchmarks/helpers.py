@@ -1,5 +1,5 @@
 """
-benchmark-agnostic helper functions for:
+benchmark-agnostic helper functions for all 3 stages:
     1. Compilation
     2. Pulse building
     3. Simulation
@@ -94,9 +94,7 @@ def simulate_circuit(pulse: CircuitWaveforms | None, *, n_cavity: int,
                      backend: str = "dynamiqs",
                      t1_us: float | None = None,
                      t2_us: float | None = None) -> np.ndarray | None:
-    """Simulate one pulse and return the physical cavity density matrix.
-
-    Pure: object in, state out. Scoring the state against a target is separate."""
+    """Simulate one pulse and return the physical cavity density matrix."""
     if pulse is None:
         return None
     simulator = make_simulator(backend, n_cavity)
@@ -123,7 +121,7 @@ def simulate_circuits(pulses, *, n_cavity: int, backend: str = "dynamiqs",
 
 
 def save_result(path, result, **extra) -> None:
-    """Persist a benchmark result's metric fields to an npz."""
+    """Save a benchmark result's metric fields to an npz."""
     arrays = {key: np.asarray(value) for key, value in result.model_dump().items()}
     arrays.update({key: np.asarray(value) for key, value in extra.items()})
     np.savez(str(path), **arrays)

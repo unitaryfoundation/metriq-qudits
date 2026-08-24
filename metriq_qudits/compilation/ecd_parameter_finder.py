@@ -1,8 +1,9 @@
 """
 Parameter optimization at the gate level.
 
-All kets are laid out as transmon ⊗ cavity_0 ⊗ … ⊗ cavity_{m-1}:
+All kets are formatted as: transmon ⊗ cavity_0 ⊗ … ⊗ cavity_{m-1}.
 
+More specifically,
     psi : (2 * N^m,) complex vector
           psi[:N^m]  — excited-state (|e⟩) block
           psi[N^m:]  — ground-state  (|g⟩) block
@@ -24,7 +25,7 @@ from metriq_qudits.compilation.gates import _ladder_ops, _embed_cavity, _ecd, _r
 from metriq_qudits.compilation.circuit_io import CompiledCircuit
 from metriq_qudits.paths import output_dir
 
-# Persistent XLA compilation cache. Allows for the same JIT to be leveraged
+# Persistent XLA compilation cache. Allows for the same JIT to be utilized
 # by other circuit compilations for a given (k, N) configuration, where
 # k is the depth of the circuit and N is the total dimension size (computational + buffer).
 _JAX_CACHE_DIR = output_dir() / "jax_cache"

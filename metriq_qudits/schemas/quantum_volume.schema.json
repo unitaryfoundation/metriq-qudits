@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "metriq-qudits/quantum_volume.schema.json",
   "title": "quantum_volume",
-  "description": "Quantum-volume benchmark definition: which qudit dimensions to characterize and how many Haar-random targets per dimension. Noise-agnostic — coherence lives in the device config.",
+  "description": "Quantum-volume benchmark definition: user specifies which qudit dimensions to characterize and how many Haar-random targets per dimension.",
   "type": "object",
   "properties": {
     "benchmark_name": {

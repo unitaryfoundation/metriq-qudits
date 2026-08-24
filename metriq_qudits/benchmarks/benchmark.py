@@ -57,6 +57,7 @@ class Benchmark:
 
     def run(self, config: SystemConfig, device: BaseModel) -> BenchmarkResult:
         """Execute compilation, pulse construction, simulation, and scoring."""
+        # Parse user-specified arguments
         overwrite = getattr(self.args, "overwrite", False)
         n_jobs = getattr(self.args, "n_jobs", N_JOBS)
         correct_phases = getattr(self.args, "correct_phases", True)
@@ -88,7 +89,7 @@ class Benchmark:
         pulse_paths = [pulses_dir / f"{i:04d}.npz" for i in range(n_unitaries)]
 
         # Compile stage: compile the ensemble, then save every circuit.
-        # Overwrite gate: run when forced (i.e. --overwrite True) or missing, otherwise reuse what is on disk.
+        # Overwrite gate: run when forced (i.e. --overwrite True) or missing, otherwise reuse what is already saved.
         print("  [2/4] Circuit compilation", flush=True)
         circuits_cached = not overwrite and all(path.exists() for path in circuit_paths)
         compile_start = time.perf_counter()

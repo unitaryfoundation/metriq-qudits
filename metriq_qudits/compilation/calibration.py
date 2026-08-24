@@ -21,7 +21,7 @@ from metriq_qudits.compilation.ecd_parameter_finder import (
 )
 from metriq_qudits.parallel import parallel_map
 
-# Fock-buffer calibration search extents and optimizer policy.
+# Fock-buffer calibration search parameters and optimizer policy.
 MIN_BUFFERS = 3
 MAX_BUFFERS = 35
 N_CALIBRATION_CIRCUITS = 5
