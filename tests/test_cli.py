@@ -73,10 +73,13 @@ def recorded_runs(monkeypatch):
     return calls
 
 
-def test_main_runs_once_per_dimension(recorded_runs, tmp_path):
+def test_main_runs_once_per_dimension(recorded_runs, tmp_path, capsys):
     cfg = _write_config(tmp_path, dimensions=[4, 6, 8])
     cli.main([cfg, "--output-dir", str(tmp_path)])
     assert [config.d for config, _ in recorded_runs] == [4, 6, 8]
+    output = capsys.readouterr().out
+    assert "Dimension d=4 (1/3)" in output
+    assert "Dimension d=8 (3/3)" in output
 
 
 def test_main_defaults_to_ideal_device(recorded_runs, tmp_path):

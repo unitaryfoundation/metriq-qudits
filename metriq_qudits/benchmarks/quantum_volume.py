@@ -63,13 +63,16 @@ class QuantumVolume(Benchmark):
             self.run_dir(config) / "calibration.npz", config.d,
             overwrite=getattr(self.args, "overwrite", False),
             n_jobs=getattr(self.args, "n_jobs", N_JOBS),
+            progress=self._detail,
         )
 
-    def compile(self, config: SystemConfig, targets, cal: Calibration):
+    def compile(self, config: SystemConfig, targets, cal: Calibration,
+                on_progress=None):
         return compile_circuits(
             targets, d=config.d, n_cavity=cal.n_cavity, k_init=cal.k_start,
             k_max=cal.k_max, optimizer_config=compile_config(cal),
             n_jobs=getattr(self.args, "n_jobs", N_JOBS),
+            on_progress=on_progress,
         )
 
     def score(self, config: SystemConfig, states, targets, cal: Calibration) -> QVResult:

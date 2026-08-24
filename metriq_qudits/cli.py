@@ -74,9 +74,9 @@ def main(argv=None) -> None:
     print(f"Output directory: {output_dir()}")
 
     start = time.perf_counter()
-    for d in params.dimensions:
+    for index, d in enumerate(params.dimensions, start=1):
         print("\n" + "=" * 60)
-        print(f"  d={d}")
+        print(f"  Dimension d={d} ({index}/{len(params.dimensions)})")
         print("=" * 60)
         benchmark.run(SystemConfig(d=d), device)
     print("\n" + "=" * 60)

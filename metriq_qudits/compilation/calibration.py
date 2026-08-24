@@ -75,10 +75,16 @@ def _buffer_diagnostics(d, depth, stability_th, tried, max_stab, curves, best):
     }
 
 
-def _calibrate_buffers(d, depth, targets, seed, penalty_weight, stability_th, n_jobs):
+def _calibrate_buffers(d, depth, targets, seed, penalty_weight, stability_th, n_jobs,
+                       progress=None):
     """Smallest Fock buffer whose calibration circuits stay stable off the boundary."""
     tried, max_stab, curves = [], [], []
     for num_buffers in range(MIN_BUFFERS, MAX_BUFFERS + 1):
+        if progress is not None:
+            progress(
+                f"calibration: testing {num_buffers} buffer states "
+                f"with {len(targets)} circuits"
+            )
         n_penalize = _buffer_count_to_penalize(num_buffers)
         n_cavity = d + num_buffers
         # stability_th=None: accept the best converged candidate, then measure its
@@ -99,6 +105,12 @@ def _calibrate_buffers(d, depth, targets, seed, penalty_weight, stability_th, n_
         tried.append(num_buffers)
         max_stab.append(peak)
         curves.append(circuit_curves)
+        if progress is not None:
+            status = "stable" if valid.size and peak < stability_th else "continue"
+            progress(
+                f"calibration: {num_buffers} buffer states -> "
+                f"max stability infidelity {peak:.2e} ({status})"
+            )
         if valid.size and peak < stability_th:
             return num_buffers, n_penalize, _buffer_diagnostics(
                 d, depth, stability_th, tried, max_stab, curves, num_buffers)
@@ -121,7 +133,8 @@ def _probe_start_depth(d, floor, depth, n_cavity, n_penalize, targets, seed,
 
 
 def calibrate(d: int, *, n_jobs: int, penalty_weight: float = PENALTY_WEIGHT,
-              stability_th: float = STABILITY_THRESHOLD) -> Calibration:
+              stability_th: float = STABILITY_THRESHOLD,
+              progress=None) -> Calibration:
     """Fit the Fock truncation, penalty count, and depth window for one dimension."""
     dimension = d
     floor = parameter_counting_floor(dimension)
@@ -132,8 +145,11 @@ def calibrate(d: int, *, n_jobs: int, penalty_weight: float = PENALTY_WEIGHT,
     buffer_seed = int(rng.integers(0, 2**31))
     probe_seed = int(rng.integers(0, 2**31))
     num_buffers, n_penalize, diagnostics = _calibrate_buffers(
-        d, depth, targets, buffer_seed, penalty_weight, stability_th, n_jobs)
+        d, depth, targets, buffer_seed, penalty_weight, stability_th, n_jobs,
+        progress=progress)
     n_cavity = d + num_buffers
+    if progress is not None:
+        progress(f"calibration: probing production start depth k={floor}..{depth}")
     k_start = _probe_start_depth(
         d, floor, depth, n_cavity, n_penalize, targets, probe_seed,
         penalty_weight, stability_th, n_jobs)
@@ -160,13 +176,14 @@ def _read(path) -> Calibration:
 
 def load_or_calibrate(path, d: int, *, overwrite: bool = False, n_jobs: int,
                       penalty_weight: float = PENALTY_WEIGHT,
-                      stability_th: float = STABILITY_THRESHOLD) -> Calibration:
+                      stability_th: float = STABILITY_THRESHOLD,
+                      progress=None) -> Calibration:
     """Existence-cached calibration for one dimension."""
     path = Path(path)
     if not overwrite and path.exists():
         return _read(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     cal, diagnostics = calibrate(d, n_jobs=n_jobs, penalty_weight=penalty_weight,
-                                 stability_th=stability_th)
+                                 stability_th=stability_th, progress=progress)
     _write(path, cal, diagnostics)
     return cal

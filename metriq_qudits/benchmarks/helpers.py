@@ -44,11 +44,12 @@ def compile_circuit(unitary: np.ndarray, *, d: int, n_cavity: int, k_init: int,
 
 def compile_circuits(unitaries: list[np.ndarray], *, d: int, n_cavity: int,
                      k_init: int, k_max: int, optimizer_config: OptimizerConfig,
-                     n_jobs: int = N_JOBS) -> list[CompiledCircuit | None]:
+                     n_jobs: int = N_JOBS,
+                     on_progress=None) -> list[CompiledCircuit | None]:
     """Parallel compilation across circuits."""
     worker = partial(compile_circuit, d=d, n_cavity=n_cavity, k_init=k_init,
                      k_max=k_max, optimizer_config=optimizer_config)
-    return list(parallel_map(worker, unitaries, n_jobs))
+    return list(parallel_map(worker, unitaries, n_jobs, on_progress=on_progress))
 
 
 # Peak intra-gate cavity displacement used when shaping ECD pulses (Eickbusch et al. 2022).
@@ -113,11 +114,12 @@ def simulate_circuit(pulse: CircuitWaveforms | None, *, n_cavity: int,
 
 def simulate_circuits(pulses, *, n_cavity: int, backend: str = "dynamiqs",
                       t1_us: float | None = None, t2_us: float | None = None,
-                      n_jobs: int = N_JOBS) -> list[np.ndarray | None]:
+                      n_jobs: int = N_JOBS,
+                      on_progress=None) -> list[np.ndarray | None]:
     """Simulate the ensemble in parallel."""
     worker = partial(simulate_circuit, n_cavity=n_cavity, backend=backend,
                      t1_us=t1_us, t2_us=t2_us)
-    return list(parallel_map(worker, pulses, n_jobs))
+    return list(parallel_map(worker, pulses, n_jobs, on_progress=on_progress))
 
 
 def save_result(path, result, **extra) -> None:
