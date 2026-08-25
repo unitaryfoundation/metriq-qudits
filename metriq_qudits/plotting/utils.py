@@ -390,16 +390,18 @@ def _diagonal_indices(T1_us, T2_us):
 
 
 def plot_t1_sweep(records, out_path: str) -> bool:
-    """HOG and XEB along the physical T2 = 2*T1 diagonal versus qubit T1, one line
-    per config (mean ± SEM). The noiseless ceilings are drawn as dotted lines in
-    the matching color and the HOG pass threshold as a dashed line. Returns False
-    (writing nothing) when no config has any point on the diagonal.
+    """HOG, XEB, and fidelity along the physical T2 = 2*T1 diagonal versus qubit
+    T1, one line per config (mean ± SEM). The noiseless ceilings are drawn as
+    dotted lines in the matching color and the HOG pass threshold as a dashed
+    line. Returns False (writing nothing) when no config has any point on the
+    diagonal.
 
-    records: list of dicts with keys d, T1_us, T2_us, hog, xeb, hog_std, xeb_std,
-    N_u, and optional hog_nl / xeb_nl noiseless ceilings.
+    records: list of dicts with keys d, T1_us, T2_us, hog, xeb, fid, hog_std,
+    xeb_std, fid_std, N_u, and optional hog_nl / xeb_nl / fid_nl noiseless
+    ceilings.
     """
     records = sorted(records, key=lambda r: r["d"])
-    fig, (ax_hog, ax_xeb) = plt.subplots(1, 2, figsize=(12, 4.5))
+    fig, (ax_hog, ax_xeb, ax_fid) = plt.subplots(1, 3, figsize=(17, 4.5))
     palette = plt.cm.tab10.colors
     plotted = False
 
@@ -410,16 +412,19 @@ def plot_t1_sweep(records, out_path: str) -> bool:
         if not pairs:
             continue
         N_u = max(int(rec.get("N_u", 1)), 1)
-        t1_pts, hog_pts, hog_err, xeb_pts, xeb_err = [], [], [], [], []
+        t1_pts, hog_pts, hog_err = [], [], []
+        xeb_pts, xeb_err, fid_pts, fid_err = [], [], [], []
         for it1, it2 in pairs:
-            h, x = rec["hog"][it1, it2], rec["xeb"][it1, it2]
-            if np.isnan(h) or np.isnan(x):
+            h, x, f = rec["hog"][it1, it2], rec["xeb"][it1, it2], rec["fid"][it1, it2]
+            if np.isnan(h) or np.isnan(x) or np.isnan(f):
                 continue
             t1_pts.append(T1[it1])
             hog_pts.append(h)
             xeb_pts.append(x)
+            fid_pts.append(f)
             hog_err.append(rec["hog_std"][it1, it2] / np.sqrt(N_u))
             xeb_err.append(rec["xeb_std"][it1, it2] / np.sqrt(N_u))
+            fid_err.append(rec["fid_std"][it1, it2] / np.sqrt(N_u))
         if not t1_pts:
             continue
 
@@ -429,10 +434,14 @@ def plot_t1_sweep(records, out_path: str) -> bool:
                         ms=5, lw=1.8, capsize=3, label=label)
         ax_xeb.errorbar(t1_pts, xeb_pts, yerr=xeb_err, color=color, marker="s",
                         ms=5, lw=1.8, capsize=3, label=label)
+        ax_fid.errorbar(t1_pts, fid_pts, yerr=fid_err, color=color, marker="^",
+                        ms=5, lw=1.8, capsize=3, label=label)
         if rec.get("hog_nl") is not None:
             ax_hog.axhline(rec["hog_nl"], color=color, ls=":", lw=1.2, alpha=0.8)
         if rec.get("xeb_nl") is not None:
             ax_xeb.axhline(rec["xeb_nl"], color=color, ls=":", lw=1.2, alpha=0.8)
+        if rec.get("fid_nl") is not None:
+            ax_fid.axhline(rec["fid_nl"], color=color, ls=":", lw=1.2, alpha=0.8)
         plotted = True
 
     if not plotted:
@@ -450,6 +459,11 @@ def plot_t1_sweep(records, out_path: str) -> bool:
     ax_xeb.set_title("XEB$_n$ at T₂ = 2T₁")
     ax_xeb.grid(True, alpha=0.3)
     ax_xeb.legend(fontsize=8)
+    ax_fid.set_xlabel("qubit T₁ [µs]")
+    ax_fid.set_ylabel("fidelity")
+    ax_fid.set_title("Fidelity at T₂ = 2T₁")
+    ax_fid.grid(True, alpha=0.3)
+    ax_fid.legend(fontsize=8)
 
     fig.suptitle("Coherence sweep: metrics vs T₁ along T₂ = 2T₁  "
                  "(dotted = noiseless ceiling)", fontsize=10)

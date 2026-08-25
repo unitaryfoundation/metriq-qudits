@@ -161,9 +161,10 @@ def _plot_device(benchmark_dir: Path, device: str) -> None:
         plot_noise_heatmaps(record, str(out))
         print(f"  [{device}] T1/T2 heatmaps d={record['d']} -> {out}")
 
-    ceilings = {r["d"]: (r["hog"], r["xeb"]) for r in noiseless}
+    ceilings = {r["d"]: (r["hog"], r["xeb"], r["fid"]) for r in noiseless}
     for record in sweeps:
-        record["hog_nl"], record["xeb_nl"] = ceilings.get(record["d"], (None, None))
+        record["hog_nl"], record["xeb_nl"], record["fid_nl"] = ceilings.get(
+            record["d"], (None, None, None))
     t1_out = out_dir / "t1_sweep.png"
     if plot_t1_sweep(sweeps, str(t1_out)):
         print(f"  [{device}] T1 sweep ({len(sweeps)} config(s)) -> {t1_out}")
