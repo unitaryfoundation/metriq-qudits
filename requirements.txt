@@ -1,6 +1,8 @@
 dynamiqs==0.3.4
 jax==0.6.2
+jsonschema==4.26.0
 matplotlib==3.11.1
 numpy==2.5.1
+pydantic==2.13.4
 qutip==5.3.0
 scipy==1.18.0

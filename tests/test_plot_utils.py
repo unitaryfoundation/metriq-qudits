@@ -142,11 +142,13 @@ def _sweep_record(d, T1=(5, 10, 20, 50, 100), T2=(10, 20, 40, 100, 200), ceiling
         "N_u": 25,
         "hog": rng.uniform(0.6, 0.8, shape),
         "xeb": rng.uniform(0.7, 0.98, shape),
+        "fid": rng.uniform(0.7, 0.99, shape),
         "hog_std": rng.uniform(0.01, 0.05, shape),
         "xeb_std": rng.uniform(0.01, 0.05, shape),
+        "fid_std": rng.uniform(0.01, 0.05, shape),
     }
     if ceiling:
-        rec["hog_nl"], rec["xeb_nl"] = 0.77, 0.97
+        rec["hog_nl"], rec["xeb_nl"], rec["fid_nl"] = 0.77, 0.97, 0.98
     return rec
 
 

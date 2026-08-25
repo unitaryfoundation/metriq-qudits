@@ -1,5 +1,6 @@
-% ECD--QV pipeline flow diagram (standalone figure).
-% Build: tectonic docs/pipeline_flow.tex   (or pdflatex docs/pipeline_flow.tex)
+% metriq-qudits pipeline flow diagram (standalone figure).
+% Build: tectonic docs/pipeline_flow.tex
+%        pdf2svg docs/pipeline_flow.pdf docs/pipeline_flow.svg
 \documentclass[border=8pt]{standalone}
 
 \usepackage{tikz}
@@ -7,62 +8,33 @@
 \usepackage{amssymb}
 \usetikzlibrary{arrows.meta, positioning}
 
-\newcommand{\Nunitaries}{N}
+\definecolor{cBlue}{HTML}{4C72B0}
+\definecolor{cGreen}{HTML}{55A868}
+\definecolor{cPurple}{HTML}{8172B3}
+\definecolor{cSlate}{HTML}{555555}
 
 \begin{document}
 \begin{tikzpicture}[
     box/.style={
-        draw, rectangle, rounded corners=4pt,
-        minimum width=7.2cm, minimum height=1.7cm,
-        align=center, font=\large,
-        line width=1.2pt
+        draw, rounded corners=5pt, align=center,
+        minimum height=2.5cm, text width=4.7cm,
+        line width=1.4pt, font=\normalsize
     },
-    prep/.style={
-        draw, dashed, rectangle, rounded corners=4pt,
-        minimum width=7.2cm, minimum height=1.1cm,
-        align=center, font=\small,
-        line width=1.0pt
-    },
-    arrow/.style={
-        ->, -{Stealth[length=8pt]},
-        line width=1.2pt
-    },
-    lbl/.style={font=\small, align=center, text width=4.4cm}
+    arrow/.style={-{Stealth[length=9pt]}, line width=1.4pt, draw=cSlate},
+    elbl/.style={midway, above=3pt, align=center, font=\normalsize}
 ]
 
-\node[font=\Large\bfseries] (title) {ECD--QV Pipeline};
+\node[box, draw=cBlue, fill=cBlue!10] (comp)
+    {\large\textbf{Compile}\\[5pt]{\ttfamily\small ECDParameterFinder}\\[5pt]Haar Unitaries to ECD circuits};
+\node[box, draw=cGreen, fill=cGreen!10, right=3.0cm of comp] (pulse)
+    {\large\textbf{Build pulses}\\[5pt]{\ttfamily\small ECDPulseBuilder}\\[5pt]control waveforms};
+\node[box, draw=cPurple, fill=cPurple!10, right=3.0cm of pulse] (sim)
+    {\large\textbf{Simulate}\\[5pt]{\ttfamily\small DisplacedFrameSimulator}\\[5pt]noiseless + T1/T2 sweep};
 
-\node[prep, below=0.6cm of title] (calib) {
-    Fock-buffer calibration \emph{(cached)} \\[1pt]
-    depth probe \emph{(optional, \texttt{--probe})}
-};
-
-\node[box, below=1.4cm of calib] (gate) {
-    Gate Parameter Optimizer \\[3pt]
-    \small\texttt{ECDParameterFinder} $\cdot$ L-BFGS (restart) / Adam \\[-1pt]
-    \small \Nunitaries\ Haar targets $\cdot$ ideal ECD model
-};
-
-\node[box, below=2.4cm of gate] (pulse) {
-    Pulse Builder \\[3pt]
-    \small\texttt{ECDPulseBuilder} $\cdot$ solve $\alpha(t)$ ODE \\[-1pt]
-    \small virtual-Z correction $\cdot$ Kerr/$\chi'$ correction
-};
-
-\node[box, below=2.4cm of pulse] (sim) {
-    Displaced Frame Simulation \\[3pt]
-    \small\texttt{DisplacedFrameSimulator} $\cdot$ dynamiqs (default) / QuTiP \\[-1pt]
-    \small T1/T2 noise sweep $\cdot$ HOG \& XEB metrics
-};
-
-\draw[arrow] (calib.south) -- (gate.north)
-    node[midway, right=0.3cm, lbl] {$N_{\mathrm{cav}}$, $k_{\mathrm{start}}$};
-
-\draw[arrow] (gate.south) -- (pulse.north)
-    node[midway, right=0.3cm, lbl] {$\{\beta_j,\,\theta_j\}$ per ECD layer};
-
-\draw[arrow] (pulse.south) -- (sim.north)
-    node[midway, right=0.3cm, lbl] {$\varepsilon(t)$, $\omega(t)$ waveforms};
+\draw[arrow] (comp) -- (pulse)
+    node[elbl] {$\{\beta_j,\theta_j\}$\\[5pt]per ECD layer};
+\draw[arrow] (pulse) -- (sim)
+    node[elbl] {$\varepsilon(t),\,\omega(t)$\\[5pt]waveforms};
 
 \end{tikzpicture}
 \end{document}

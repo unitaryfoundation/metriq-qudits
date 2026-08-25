@@ -1,11 +1,10 @@
 """Hardware-neutral intermediate representation (IR) for ECD+rotation circuits.
 
-Serializes a :class:`CompiledCircuit` into a provider-neutral, versioned gate
+Serializes the CompiledCircuit object into a provider-neutral, versioned gate
 list. This is the hand-off point to a hardware adapter. The IR carries only the
 abstract gate parameters, namely the conditional displacement β and the ancilla
 rotation angles θ and φ. Waveforms, calibration constants (α_CD, χ, χ′, K), and
-the spurious cavity phase corrections all live on the device side, downstream of
-this boundary.
+the spurious cavity phase corrections all live on the device side.
 
 Schema ``metriq.ecd_rot.v1``::
 
@@ -45,7 +44,7 @@ def _ecd_op(beta: complex) -> dict:
 
 
 def compiled_circuit_to_ir(circuit: CompiledCircuit, *, n_cav: int | None = None) -> dict:
-    """Serialize a single-qudit compiled circuit to the ``metriq.ecd_rot.v1`` IR.
+    """Serialize a compiled qudit circuit to the ``metriq.ecd_rot.v1`` IR.
 
     Parameters
     ----------

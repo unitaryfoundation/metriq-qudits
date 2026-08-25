@@ -4,9 +4,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-_ARRAY_KEYS = {"betas", "rotations", "q", "psi", "boundary_leakage", "err",
-               "k_per_circuit", "opt_trace", "k_sweep"}
-
 
 @dataclass(frozen=True)
 class CompiledCircuit:
@@ -42,69 +39,51 @@ class CompiledCircuit:
         return np.abs(self.target_state) ** 2
 
 
-def save_circuits(circuits: list[CompiledCircuit], config: dict, path: str) -> None:
-    num_modes = config["num_modes"]
-    k_per     = np.array([c.depth for c in circuits], dtype=np.int32)
-    k_max     = int(k_per.max())
+def save_circuit(path: str, circuit: CompiledCircuit) -> None:
+    """Write one compiled circuit to its own npz.
 
-    betas     = np.zeros((len(circuits), k_max, num_modes), dtype=complex)
-    rotations = np.zeros((len(circuits), k_max * num_modes + 1, 2))
-    for i, c in enumerate(circuits):
-        betas[i, :c.depth] = c.betas
-        rotations[i, :c.depth * num_modes + 1] = c.rotations
-
-    n_ckpt = max((len(c.optimization_trace) for c in circuits
-                  if c.optimization_trace is not None), default=0)
-    opt_trace = np.full((len(circuits), n_ckpt), np.nan)
-    for i, c in enumerate(circuits):
-        if c.optimization_trace is not None:
-            opt_trace[i, :len(c.optimization_trace)] = c.optimization_trace
-
-    n_k = max((len(c.depth_sweep) for c in circuits
-               if c.depth_sweep is not None), default=0)
-    k_sweep = np.full((len(circuits), n_k, 2), np.nan)
-    for i, c in enumerate(circuits):
-        if c.depth_sweep is not None:
-            k_sweep[i, :len(c.depth_sweep)] = c.depth_sweep
-
-    np.savez(
-        path,
-        **config,
-        betas=betas,
-        rotations=rotations,
-        q=np.array([c.target_probabilities for c in circuits]),
-        psi=np.array([c.target_state for c in circuits], dtype=complex),
-        boundary_leakage=np.array([c.boundary_leakage for c in circuits]),
-        err=np.array([c.infidelity for c in circuits]),
-        k_per_circuit=k_per,
-        opt_trace=opt_trace,
-        k_sweep=k_sweep,
-    )
+    Per-unitary files need no batch padding: a single circuit's arrays are all
+    regular, so this is a plain dump of its fields."""
+    arrays = {
+        "betas": circuit.betas,
+        "rotations": circuit.rotations,
+        "target_state": circuit.target_state,
+        "infidelity": circuit.infidelity,
+        "boundary_leakage": circuit.boundary_leakage,
+    }
+    if circuit.optimization_trace is not None:
+        arrays["optimization_trace"] = circuit.optimization_trace
+    if circuit.depth_sweep is not None:
+        arrays["depth_sweep"] = circuit.depth_sweep
+    np.savez(path, **arrays)
 
 
-def load_circuits(path: str) -> tuple[list[CompiledCircuit], dict]:
-    data      = np.load(path, allow_pickle=False)
-    num_modes = int(data["num_modes"].item())
-
-    def _opt_trace(i):
-        row = data["opt_trace"][i]
-        return row[~np.isnan(row)]
-
-    def _k_sweep(i):
-        rows = data["k_sweep"][i]
-        return rows[~np.isnan(rows[:, 0])]
-
-    circuits = [
-        CompiledCircuit(
-            betas=data["betas"][i, :ki],
-            rotations=data["rotations"][i, :ki * num_modes + 1],
-            target_state=data["psi"][i],
-            boundary_leakage=float(data["boundary_leakage"][i]),
-            infidelity=float(data["err"][i]),
-            optimization_trace=_opt_trace(i),
-            depth_sweep=_k_sweep(i),
+def load_circuit(path: str) -> CompiledCircuit:
+    """Load one compiled circuit written by save_circuit."""
+    with np.load(path, allow_pickle=False) as data:
+        return CompiledCircuit(
+            betas=data["betas"],
+            rotations=data["rotations"],
+            target_state=data["target_state"],
+            infidelity=float(data["infidelity"]),
+            boundary_leakage=float(data["boundary_leakage"]),
+            optimization_trace=(
+                data["optimization_trace"]
+                if "optimization_trace" in data.files else None
+            ),
+            depth_sweep=(
+                data["depth_sweep"] if "depth_sweep" in data.files else None
+            ),
         )
-        for i, ki in enumerate(data["k_per_circuit"])
-    ]
-    config = {key: data[key].item() for key in data.files if key not in _ARRAY_KEYS}
-    return circuits, config
+
+
+def save_circuits(paths, circuits: list[CompiledCircuit | None]) -> None:
+    """Save each compiled circuit to its own path, skipping targets that did not converge."""
+    for path, circuit in zip(paths, circuits):
+        if circuit is not None:
+            save_circuit(str(path), circuit)
+
+
+def load_circuits(paths) -> list[CompiledCircuit | None]:
+    """Load circuits by path, kept index-aligned (None where a file is missing)."""
+    return [load_circuit(str(path)) if path.exists() else None for path in paths]

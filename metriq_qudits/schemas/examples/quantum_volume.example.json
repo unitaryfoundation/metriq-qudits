@@ -1,0 +1,6 @@
+{
+  "benchmark_name": "quantum_volume",
+  "dimensions": [4, 8, 12],
+  "n_unitaries": 25,
+  "seed": 42
+}

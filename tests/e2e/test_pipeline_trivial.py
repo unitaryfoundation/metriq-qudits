@@ -1,16 +1,16 @@
 """End-to-end pipeline test with a trivial circuit (known answer).
 
-Substitutes only the slow JAX optimizer by hand-building one compiled circuit,
-then runs the REAL stages: build_circuit_pulses -> run_noiseless. The betas are
-below the ECD threshold, so the cavity stays in vacuum and fidelity to |0> ~ 1.
+Hand-builds one compiled circuit (substituting the slow JAX optimizer), then runs
+the REAL build -> simulate stages. The betas are below the ECD threshold, so the
+cavity stays in vacuum and fidelity to |0> ~ 1.
 """
 
 import numpy as np
 import pytest
 
-from metriq_qudits.compilation.circuit_io import CompiledCircuit, save_circuits
-from metriq_qudits.pulses.build import build_circuit_pulses
-from metriq_qudits.simulation.sweep import run_noiseless
+from metriq_qudits.benchmarks.helpers import build_circuit_pulse, simulate_circuit
+from metriq_qudits.compilation.circuit_io import CompiledCircuit
+from metriq_qudits.metrics import eval_circuit
 
 
 def _trivial_circuit(d, depth=4):
@@ -26,21 +26,12 @@ def _trivial_circuit(d, depth=4):
     )
 
 
-def test_noiseless_pipeline_prepares_vacuum(tmp_path, monkeypatch):
-    monkeypatch.setenv("METRIQ_QUDITS_OUTPUT_DIR", str(tmp_path))
+def test_noiseless_pipeline_prepares_vacuum():
     d, depth, n_cav = 4, 4, 16
-
-    compiled_path = str(tmp_path / "compiled.npz")
-    meta = {"d": d, "k": depth, "num_modes": 1, "N_cav": n_cav,
-            "N_unitaries": 1, "seed": 42}
-    save_circuits([_trivial_circuit(d, depth)], meta, compiled_path)
-
-    pulse_path = build_circuit_pulses(compiled_path, n_jobs=1)
-    out_path = run_noiseless(pulse_path, compiled_path, backend="qutip")
-
-    with np.load(out_path) as res:
-        assert res["fid_mean"] == pytest.approx(1.0, abs=1e-3)
-        assert 0.0 <= float(res["hog_mean"]) <= 1.0 + 1e-9
-        assert float(res["xeb_mean"]) <= 1.0 + 1e-9
-        assert res["fid_per_circuit"].shape == (1,)
-        assert int(res["d"]) == d
+    circuit = _trivial_circuit(d, depth)
+    pulse = build_circuit_pulse(circuit)
+    state = simulate_circuit(pulse, n_cavity=n_cav, backend="qutip")
+    m = eval_circuit(state, circuit.target_state, d, 1, n_cav)
+    assert m.fid == pytest.approx(1.0, abs=1e-3)
+    assert 0.0 <= m.hog <= 1.0 + 1e-9
+    assert m.xeb <= 1.0 + 1e-9

@@ -4,8 +4,8 @@
 import numpy as np
 import pytest
 
+from metriq_qudits.pulses.drive_envelopes import CavityMode, TransmonAncilla
 from metriq_qudits.pulses.ecd_pulse_builder import ECDPulseBuilder
-from metriq_qudits.pulses.build import make_ancilla, make_modes
 from metriq_qudits.simulation.displaced_frame_dynamiqs import DisplacedFrameSimulatorDQ
 
 pytestmark = pytest.mark.slow
@@ -20,8 +20,8 @@ def _random_pulse(seed=0):
     rotations = np.column_stack([
         rng.uniform(0, np.pi, DEPTH + 1), rng.uniform(0, 2 * np.pi, DEPTH + 1),
     ])
-    mode = make_modes(1)[0]
-    pulse = ECDPulseBuilder([mode], make_ancilla()).compile_circuit(
+    mode = CavityMode()
+    pulse = ECDPulseBuilder([mode], TransmonAncilla()).compile_circuit(
         betas=betas, rotations=rotations, peak_amplitude=10, correct_cavity_phases=True,
     )
     return mode, pulse

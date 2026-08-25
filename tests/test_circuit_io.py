@@ -52,12 +52,11 @@ def test_post_init_rejects_non_1d_target():
 
 
 def test_roundtrip_preserves_variable_depth_circuits(tmp_path):
-    circuits = [_circuit(2), _circuit(3)]  # different depths exercise the padding
-    config = {"num_modes": 1, "d": 4, "N_cav": 20}
-    path = str(tmp_path / "circuits.npz")
+    circuits = [_circuit(2), _circuit(3)]  # different depths
+    paths = [tmp_path / f"{i:04d}.npz" for i in range(len(circuits))]
 
-    save_circuits(circuits, config, path)
-    loaded, loaded_config = load_circuits(path)
+    save_circuits(paths, circuits)
+    loaded = load_circuits(paths)
 
     assert len(loaded) == 2
     for orig, got in zip(circuits, loaded):
@@ -70,4 +69,14 @@ def test_roundtrip_preserves_variable_depth_circuits(tmp_path):
         np.testing.assert_allclose(got.optimization_trace, orig.optimization_trace)
         np.testing.assert_allclose(got.depth_sweep, orig.depth_sweep)
 
-    assert loaded_config == {"num_modes": 1, "d": 4, "N_cav": 20}
+
+def test_load_is_index_aligned_with_none_for_missing(tmp_path):
+    circuits = [_circuit(2), None, _circuit(3)]
+    paths = [tmp_path / f"{i:04d}.npz" for i in range(len(circuits))]
+
+    save_circuits(paths, circuits)
+    loaded = load_circuits(paths)
+
+    assert not paths[1].exists()  # a None circuit writes no file
+    assert loaded[1] is None
+    assert loaded[0].depth == 2 and loaded[2].depth == 3

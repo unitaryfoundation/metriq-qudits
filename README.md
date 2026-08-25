@@ -1,141 +1,146 @@
 # metriq-qudits
 
+[![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
+[![Metriq](https://img.shields.io/badge/Metriq-metriq.info-6f42c1)](https://metriq.info/)
+
 `metriq-qudits` is an open-source framework for benchmarking qudit systems,
 developed in parallel with the qubit benchmarks implemented in
 [metriq-gym](https://github.com/unitaryfoundation/metriq-gym). It complements
 the benchmarking ecosystem described in the
 [Metriq paper](https://arxiv.org/abs/2603.08680).
 
+Currently `metriq-qudits` only runs (simulated) quantum volume experiments. The
+benchmark code lives under
+[`metriq_qudits/benchmarks/`](metriq_qudits/benchmarks/). More benchmarks are
+planned and will be added to the benchmarks folder alongside quantum volume.
+We also plan to add hardware backend execution (see the Hardware Interface page in our wiki to learn more).
+
 
 ## Installation
 
-Requires Python 3.12 or 3.13.
+metriq-qudits requires Python 3.12 or 3.13. To get started, clone the repository and change to its directory:
 
-1. Clone the repository:
+```bash
+git clone https://github.com/unitaryfoundation/metriq-qudits.git
+cd metriq-qudits
+```
 
-   ```bash
-   git clone https://github.com/unitaryfoundation/metriq-qudits.git
-   cd metriq-qudits
-   ```
+Then, create and activate a virtual environment:
 
-2. Create and activate a virtual environment:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
+```
 
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
-   ```
+Now install the package. This pulls in the standard CPU build of JAX, so if you are on a GPU you should first follow the [JAX installation guide](https://docs.jax.dev/en/latest/installation.html) for your platform:
 
-3. Install the package. This pulls in the standard CPU build of JAX. GPU users
-   should first follow the
-   [JAX installation guide](https://docs.jax.dev/en/latest/installation.html)
-   for their platform.
+```bash
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-   ```bash
-   python -m pip install --upgrade pip
-   python -m pip install -e .
-   ```
+Finally, confirm the command works and view the available options:
 
-4. Confirm the command is installed and view the available options:
-
-   ```bash
-   metriq-qudits --help
-   ```
+```bash
+metriq-qudits --help
+```
 
 ## Running the pipeline
 
-Run the smallest configured system without the full noise sweep:
+Like [metriq-gym](https://github.com/unitaryfoundation/metriq-gym), `metriq-qudits` takes JSON configuration files as input. The user provides 1) a benchmark config and 2) an optional device config. The `metriq-qudits` command automatically executes the full pipeline: compilation → pulse building → simulation. Examples of both types of config files can be found in [`metriq_qudits/schemas/examples/`](metriq_qudits/schemas/examples/).
+
+### Quickstart
+
+You can use the provided experiment config files to get started. For instance, to run a quantum volume experiment using an ideal backend simulator, simply pass a benchmark config without specifying a device config (`--device` defaults to the noiseless ideal backend):
 
 ```bash
-metriq-qudits --configs d4 --skip-sweep
+metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json
 ```
 
-Circuit compilation and pulse-level simulation are computationally expensive.
-Use `--n-jobs` to run independent circuits in parallel:
+To run the same experiment with a noise sweep, pass a device config that defines
+a T1/T2 grid:
 
 ```bash
-metriq-qudits --configs d4 --skip-sweep --n-jobs 8
+metriq-qudits metriq_qudits/schemas/examples/quantum_volume.example.json \
+    --device metriq_qudits/schemas/examples/coherence_sweep.device.json
 ```
 
-Result figures can likewise be regenerated from cached results, either through
-the `metriq-qudits` command or the standalone script:
+Once the benchmark finishes, plot the results using the following command: 
 
 ```bash
-metriq-qudits --plot-only
-# or
-python scripts/plot_results.py
+python -m metriq_qudits.plotting.results
 ```
 
-`--plot-only` reads the cached results under `outputs/` and writes the figures
-without rerunning compilation or simulation. (Use `--plot` instead to regenerate
-the figures at the end of a normal run.)
-
-Generated artifacts are written to a visible `outputs/` directory:
+### Outputs folder
+Generated artifacts are written to an `outputs/` directory, which contains one subtree
+per benchmark and qudit dimension:
 
 ```text
 outputs/
-├── calibration/
-├── compiled_circuits/
-├── pulses/
-├── noiseless/
-├── noise_sweeps/
-└── plots/
+├── runs/<benchmark>/d<d>/
+│   ├── calibration.npz
+│   ├── circuits/           # one .npz per compiled circuit
+│   ├── pulses/             # one .npz per pulse waveform
+│   └── metrics/<device>/   # scores namespaced per device
+│       ├── noiseless.npz
+│       └── sweep/          # one .npz per T1/T2 grid point
+└── plots/<benchmark>/<device>/   # figures from the plotting command
 ```
 
-Choose a different artifact root with `--output-dir /path/to/outputs` or the
-`METRIQ_QUDITS_OUTPUT_DIR` environment variable.
+Note: each stage checks the saved results before running, so a rerun reuses saved data
+unless the user passes `--overwrite`.
+
+
 
 ## Codebase overview
 
-![ECD-QV pipeline](docs/pipeline_flow.png)
-
-The command-line pipeline begins in
-[`metriq_qudits/cli.py`](metriq_qudits/cli.py), which runs the following
+The pipeline's entrypoint is in
+[`metriq_qudits/cli.py`](metriq_qudits/cli.py), and runs the following
 stages:
 
 1. **Gate parameter optimization.**
-   [`compilation/compile.py`](metriq_qudits/compilation/compile.py)
-   samples the target unitaries, selects the ECD circuit depth, and coordinates
+   Samples the target unitaries, determines the ECD circuit depth, and coordinates
    compilation. The optimizer itself is implemented in
    [`compilation/ecd_parameter_finder.py`](metriq_qudits/compilation/ecd_parameter_finder.py).
 
 2. **Pulse construction.**
-   [`pulses/build.py`](metriq_qudits/pulses/build.py) converts
-   the compiled ECD parameters into physical control pulses using
+   Converts the compiled ECD parameters into physical control pulses using
    [`pulses/ecd_pulse_builder.py`](metriq_qudits/pulses/ecd_pulse_builder.py).
 
 3. **Displaced-frame simulation.**
-   [`simulation/sweep.py`](metriq_qudits/simulation/sweep.py) runs the
-   noiseless calculation and optional T1/T2 sweep. The physical model and
+   Runs the noiseless simulation and optional T1/T2 sweep. The physical model and
    simulator are implemented in
    [`simulation/displaced_frame.py`](metriq_qudits/simulation/displaced_frame.py).
 
-4. **Results and plots.**
-   [`plotting/results.py`](metriq_qudits/plotting/results.py) loads the saved
-   simulation results and generates the figures under `outputs/plots/`.
+<br>
+
+<p align="center">
+  <img src="docs/pipeline_flow.svg" alt="Pipeline: compile, then build pulses, then simulate" width="100%">
+</p>
+
 
 #### Calibration
 
-The dashed box is a one-time **calibration phase** that runs before stage 1.
-[`compile.py`](metriq_qudits/compilation/compile.py) sweeps the number of Fock
-buffer levels above the qudit dimension and keeps the smallest count whose
-compiled circuits stay stable when replayed at larger truncations. The result is
-cached under `outputs/calibration/` and reused automatically on later runs.
-Production then starts at a generous "known-comfortable" depth by default. Add
-`--probe` to instead search for a shallower start depth, which compiles more
-slowly but yields shorter pulses and faster simulation. Use `--overwrite` to force
-a fresh calibration and `--optimizer {lbfgs,adam}` to choose the parameter
-optimizer (L-BFGS by default).
+A one-time **calibration phase** runs before the compile stage, once per qudit
+dimension. [`calibration.py`](metriq_qudits/compilation/calibration.py) sweeps
+the number of Fock buffer levels above the qudit dimension and keeps the smallest
+count whose calibration circuits stay stable when replayed at larger truncations.
+It then probes bottom-up to pick a shallow production start depth, which yields
+shorter pulses and faster simulation. The result is cached per run as
+`calibration.npz` and reused automatically on later runs. Use `--overwrite` to
+force a fresh calibration.
 
 ## References
 
 - [Benchmarking the algorithmic reach of a high-Q cavity qudit](https://arxiv.org/abs/2408.13317)
-  - The first qudit benchmarking paper from Fermilab. It implements the same
+  - The original qudit benchmarking paper from Fermilab. Implements the same
     protocol and tests as this codebase, but with the SNAP-and-displacement gate
-    set rather than the ECD-and-rotation gate set used here.
+    set rather than the ECD-and-rotation gate set.
 - [Fast Universal Control of an Oscillator with Weak Dispersive Coupling to a Qubit](https://arxiv.org/abs/2111.06414)
   - The primary source for understanding ECD gates and the k-layer ansatz of
-    alternating rotation and ECD gates used here (Fig. 1). Table S1 supplies the
-    Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/build.py`.
+    alternating rotation and ECD gates (see Fig. 1). Table S1 serves as reference for the
+    Hamiltonian parameters (χ, χ′, self-Kerr) defined in `pulses/drive_envelopes.py`.
 - [Crosstalk-Robust Quantum Control in Multimode Bosonic Systems](https://arxiv.org/abs/2403.00275)
   - The theory for the displaced-frame Hamiltonian (Eqs. B3–B5) and its Lindblad
     dissipators (Eq. B6), the classical trajectory α(t) (Eq. B3), and the

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "metriq-qudits/quantum_volume.schema.json",
+  "title": "quantum_volume",
+  "description": "Quantum-volume benchmark definition: user specifies which qudit dimensions to characterize and how many Haar-random targets per dimension.",
+  "type": "object",
+  "properties": {
+    "benchmark_name": {
+      "type": "string",
+      "const": "quantum_volume",
+      "description": "Must be 'quantum_volume' for this schema."
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 2},
+      "default": [4, 6, 8, 10, 12, 14, 16],
+      "description": "Qudit dimensions d to benchmark."
+    },
+    "n_unitaries": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 25,
+      "description": "Number of Haar-random target states drawn per dimension."
+    },
+    "seed": {
+      "type": "integer",
+      "default": 42,
+      "description": "Random seed for the target ensemble."
+    }
+  },
+  "required": ["benchmark_name"]
+}
